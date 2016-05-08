@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using VMLab.Model;
 
-namespace VMLab.Helper
+namespace VMLab.Driver.VMWareWorkstation
 {
     public interface IVMwareDiskExe
     {

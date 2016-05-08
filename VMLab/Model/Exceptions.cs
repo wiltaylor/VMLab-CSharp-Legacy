@@ -184,4 +184,20 @@ namespace VMLab.Model
             
         }
     }
+
+    public class VMLabDriverUnusableOnThisSystem : Exception
+    {
+        public VMLabDriverUnusableOnThisSystem(string message) : base(message)
+        {
+            
+        }
+    }
+
+    public class VMLabDriverNotFoundException : Exception
+    {
+        public VMLabDriverNotFoundException(string message) : base(message)
+        {
+            
+        }
+    }
 }

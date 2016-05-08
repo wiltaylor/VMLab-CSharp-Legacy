@@ -23,12 +23,24 @@ Task CleanUnitTestBuild {
 	New-Item $build_unittest_dir -ItemType Directory
 }
 
-Task BuildDebug -depends CleanBuild, CopyManifest, CopyTools {
+Task BuildDebug -depends CleanBuild, CopyManifest, CopyTools, BuildMainDebug, BuildVMwareWorkstationDriverDebug
+
+Task Build -depends CleanBuild, CopyManifest, CopyTools, BuildMain, BuildVMwareWorkstationDriver
+
+Task BuildMainDebug {
 	Exec { &$MSBuildPath VMLab.sln /t:VMLab /p:Configuration=Debug /p:OutDir=$build_artifacts_dir }
 }
 
-Task Build -depends CleanBuild, CopyManifest, CopyTools {
+Task BuildMain {
 	Exec { &$MSBuildPath VMLab.sln /t:VMLab /p:Configuration=Release /p:OutDir=$build_artifacts_dir }
+}
+
+Task BuildVMwareWorkstationDriverDebug {
+	Exec { &$MSBuildPath VMLab.sln /t:VMLab_Driver_VMWareWorkstation /p:Configuration=Debug /p:OutDir=$build_artifacts_dir }
+}
+
+Task BuildVMwareWorkstationDriver {
+    Exec { &$MSBuildPath VMLab.sln /t:VMLab_Driver_VMWareWorkstation /p:Configuration=Release /p:OutDir=$build_artifacts_dir }
 }
 
 Task BuildUnitTest -depends CleanUnitTestBuild, CopyManifest, CopyTools {
@@ -41,6 +53,7 @@ Task CopyManifest {
 
 Task Interactive -depends BuildDebug {
     &powershell.exe -noexit -command "Import-Module `"$build_artifacts_dir\vmlab.psd1`""
+
 }
 
 Task CopyTools {

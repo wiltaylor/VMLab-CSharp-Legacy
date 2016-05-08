@@ -11,6 +11,7 @@ using System.Web.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using VMLab.Drivers;
 using Moq;
+using VMLab.Driver.VMWareWorkstation;
 using VMLab.Helper;
 using VMLab.Model;
 using VMLab.Model.Caps;

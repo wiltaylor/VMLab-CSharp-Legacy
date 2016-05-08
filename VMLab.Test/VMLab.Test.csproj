@@ -143,6 +143,10 @@
     <Compile Include="VMHandler\TemplateVMHandlerTests.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\VMLab.Driver.VMWareWorkstation\VMLab.Driver.VMWareWorkstation.csproj">
+      <Project>{1b1a10e9-8cf9-4a4c-8636-d5f3f810b4a8}</Project>
+      <Name>VMLab.Driver.VMWareWorkstation</Name>
+    </ProjectReference>
     <ProjectReference Include="..\VMLab\VMLab.csproj">
       <Project>{1ac6ef74-0ee7-4f3d-84bc-0560e4b77867}</Project>
       <Name>VMLab</Name>

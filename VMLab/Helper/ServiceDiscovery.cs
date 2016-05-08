@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using Microsoft.Practices.Unity;
 using VMLab.Drivers;
 using VMLab.Model;
-using VMLab.Model.Caps;
 using VMLab.Test.Model;
 using VMLab.VMHandler;
 
@@ -12,7 +15,7 @@ namespace VMLab.Helper
     {
         private static IServiceDiscovery _instance;
         private readonly IUnityContainer _container;
-
+        
         public static void UnitTestInject(IServiceDiscovery instance)
         {
             _instance = instance;
@@ -20,10 +23,7 @@ namespace VMLab.Helper
 
         public static IServiceDiscovery GetInstance()
         {
-            if (_instance == null)
-                _instance = new ServiceDiscovery();
-
-            return _instance;
+            return _instance ?? (_instance = new ServiceDiscovery());
         }
 
         public T GetObject<T>()
@@ -36,22 +36,61 @@ namespace VMLab.Helper
             return _container.ResolveAll<T>();
         }
 
+        public void SelectDriver(string name)
+        {
+            var driver = GetAllObject<IDriverDetails>().FirstOrDefault(d => d.Name == name);
+            var env = GetObject<IEnvironmentDetails>();
+
+            if (driver == null)
+                throw new VMLabDriverNotFoundException($"Can't find driver with name {name}");
+
+            if (!driver.Usable())
+                throw new VMLabDriverUnusableOnThisSystem("Driver is not usable on this system!");
+
+            env.SelectedDriver = name;
+                
+            driver.OnSelect(_container);
+        }
+
+        public void SelectDefaultDriver()
+        {
+            var env = GetObject<IEnvironmentDetails>();
+            env.UpdateEnvironment(null);
+
+            if (string.IsNullOrEmpty(env.SelectedDriver))
+            {
+                foreach (var d in GetAllObject<IDriverDetails>().Where(d => d.Usable()))
+                {
+                    SelectDriver(d.Name);
+                    return;
+                }
+            }
+            else
+            {
+                SelectDriver(env.SelectedDriver);
+            }
+
+        }
+
         private ServiceDiscovery()
         {
             _container = new UnityContainer();
             TypeRegistaration();
         }
 
+        
+
         private void TypeRegistaration()
         {
-            _container.RegisterType<IDriver, VMwareDriver>();
-            _container.RegisterType<IVMwareHypervisor, VMwareHypervisor>();
-            _container.RegisterType<ICaps, VMwareCaps>();
+            var modulefolder = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(Assembly.GetAssembly(typeof(EnvironmentDetails)).CodeBase).Path));
+            //Loading plugins.
+            foreach (var file in Directory.EnumerateFiles(modulefolder, "VMLab.Driver.*.dll"))
+            {
+                Assembly.LoadFile(file);
+            }
+
             _container.RegisterType<IFileSystem, FileSystem>();
             _container.RegisterType<ILog, Log>(new ContainerControlledLifetimeManager());
-            _container.RegisterType<IVMRun, VMRun>();
-            _container.RegisterType<IVMwareDiskExe, VMwareDiskExe>();
-            _container.RegisterType<IVMwareExe, VMwareExe>();
             _container.RegisterType<IEnvironmentDetails, EnvironmentDetails>(new ContainerControlledLifetimeManager());
             _container.RegisterType<ICommandResult, CommandResult>();
             _container.RegisterType<IFloppyUtil, FloppyUtil>();
@@ -78,6 +117,20 @@ namespace VMLab.Helper
             _container.RegisterType<IVMNodeHandler, SharedFolderHandler>("SharedFolderHandler");
             _container.RegisterType<IVMNodeHandler, TemplateVMHandler>("TemplateVMHandler");
             _container.RegisterType<IVMNodeHandler, FloppyVMHandler>("FloppyVMHandler");
+
+            var type = typeof (IDriverDetails);
+            var alltypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(s => s.GetTypes());
+
+            var drivertypes = alltypes
+                .Where(p => type.IsAssignableFrom(p) && p != type);
+
+            foreach (var d in drivertypes)
+            {
+                _container.RegisterType(type, d, d.Name, new ContainerControlledLifetimeManager());
+            }
+
+            SelectDefaultDriver();
         }
     }
 }

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using VMLab.Model.Caps;
 
-namespace VMLab.Model.Caps
+namespace VMLab.Driver.VMWareWorkstation
 {
     public class VMwareCaps : ICaps
     {

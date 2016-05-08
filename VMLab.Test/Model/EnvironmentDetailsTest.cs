@@ -159,7 +159,7 @@ namespace VMLab.Test.Model
 
             Environment.UpdateEnvironment(new Mock<PSCmdlet>().Object);
 
-            Assert.AreEqual(Environment.FloppyToolPath, moduledir);
+            Assert.AreEqual(Environment.ModuleRootFolder, moduledir);
         }
 
         [TestMethod]

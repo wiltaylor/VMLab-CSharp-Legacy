@@ -5,6 +5,7 @@ using System.Security;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using VMLab.Driver.VMWareWorkstation;
 using VMLab.Drivers;
 using VMLab.Helper;
 using VMLab.Model;

@@ -15,10 +15,11 @@ namespace VMLab.Model
         string VMRootFolder { get; set; }
         string VMRunPath { get; set; }
         string ScratchDirectory { get; set; }
-        string FloppyToolPath { get; set; }
+        string ModuleRootFolder { get; set; }
         string VMwareDiskExe { get; set; }
         string VMwareExe { get; set; }
         string CurrentAction { get; set; }
+        string SelectedDriver { get; set; }
         int SleepTimeOut { get; set; }
         IDictionary<string, object> PackageRepository { get; set; }
         PSCmdlet Cmdlet { get; set; }
@@ -26,7 +27,6 @@ namespace VMLab.Model
         string UniqueIdentifier();
         void UpdateEnvironment(PSCmdlet cmdlet);
         void PersistEnvironment();
-
     }
 
     public class EnvironmentDetails : IEnvironmentDetails
@@ -36,10 +36,11 @@ namespace VMLab.Model
         public string VMRootFolder { get; set; }
         public string VMRunPath { get; set; }
         public string ScratchDirectory { get; set; }
-        public string FloppyToolPath { get; set; }
+        public string ModuleRootFolder { get; set; }
         public string VMwareDiskExe { get; set; }
         public string VMwareExe { get; set; }
         public string CurrentAction { get; set; }
+        public string SelectedDriver { get; set; }
         public int SleepTimeOut { get; set; }
         public IDictionary<string, object> PackageRepository { get; set; }
 
@@ -66,7 +67,8 @@ namespace VMLab.Model
         {
             Cmdlet = cmdlet;
 
-            WorkingDirectory = _cmdletPathHelper.GetPath(cmdlet);
+            if(cmdlet != null)
+                WorkingDirectory = _cmdletPathHelper.GetPath(cmdlet);   
 
             var settingsFolder = $"{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)}\\VMLab";
 
@@ -75,7 +77,7 @@ namespace VMLab.Model
                 _fileSystem.CreateFolder(settingsFolder);
             }
 
-            FloppyToolPath = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(Assembly.GetAssembly(typeof(EnvironmentDetails)).CodeBase).Path));
+            ModuleRootFolder = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(Assembly.GetAssembly(typeof(EnvironmentDetails)).CodeBase).Path));
 
             var vmfolder =
                 _registryHelper.GetRegistryValue(
@@ -112,6 +114,8 @@ namespace VMLab.Model
             ComponentPath = !string.IsNullOrEmpty(settings.ComponentPath) ? settings.ComponentPath : string.Empty;
 
             SleepTimeOut = settings.SleepTimeOut ?? 5000;
+
+            SelectedDriver = !string.IsNullOrEmpty(settings.SelectedDriver) ? settings.SelectedDriver : string.Empty;
 
             PackageRepository = settings.PackageRepository == null
                 ? settings.PackageRepository

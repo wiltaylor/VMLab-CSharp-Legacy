@@ -8,7 +8,7 @@ using System.Web.Helpers;
 using VMLab.Helper;
 using VMLab.Model;
 
-namespace VMLab.Drivers
+namespace VMLab.Driver.VMWareWorkstation
 {
     public enum CloneType
     {

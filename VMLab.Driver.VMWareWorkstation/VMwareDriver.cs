@@ -1,20 +1,19 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Management.Automation;
-using System.Runtime.Remoting.Channels;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Helpers;
+using VMLab.Drivers;
 using VMLab.Helper;
 using VMLab.Model;
 using VMLab.Model.Caps;
 using VMLab.Test.Model;
 
-namespace VMLab.Drivers
+namespace VMLab.Driver.VMWareWorkstation
 {
     public class VMwareDriver : IDriver
     {

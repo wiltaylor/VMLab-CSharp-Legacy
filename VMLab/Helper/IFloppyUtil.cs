@@ -23,7 +23,7 @@ namespace VMLab.Helper
             {
                 StartInfo =
                 {
-                    FileName = $"{_environment.FloppyToolPath}\\bfi.exe",
+                    FileName = $"{_environment.ModuleRootFolder}\\bfi.exe",
                     Arguments = $"-f=\"{imagepath}\" \"{sourcepath}\"",
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
