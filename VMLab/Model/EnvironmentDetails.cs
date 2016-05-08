@@ -19,6 +19,7 @@ namespace VMLab.Model
         string VMwareDiskExe { get; set; }
         string VMwareExe { get; set; }
         string CurrentAction { get; set; }
+        IDictionary<string, object> PackageRepository { get; set; }
         PSCmdlet Cmdlet { get; set; }
         string ComponentPath { get; set; }
         string UniqueIdentifier();
@@ -37,6 +38,8 @@ namespace VMLab.Model
         public string VMwareDiskExe { get; set; }
         public string VMwareExe { get; set; }
         public string CurrentAction { get; set; }
+        public IDictionary<string, object> PackageRepository { get; set; }
+
         public PSCmdlet Cmdlet { get; set; }
         public string ComponentPath { get; set; }
 
@@ -104,6 +107,10 @@ namespace VMLab.Model
             VMRootFolder = !string.IsNullOrEmpty(settings.VMRootFolder) ? settings.VMRootFolder : "_VM";
 
             ComponentPath = !string.IsNullOrEmpty(settings.ComponentPath) ? settings.ComponentPath : string.Empty;
+
+            PackageRepository = settings.PackageRepository == null
+                ? settings.PackageRepository
+                : new Dictionary<string, object>();
         }
 
         public void PersistEnvironment()
@@ -121,6 +128,7 @@ namespace VMLab.Model
             data.Add("VMRootFolder", VMRootFolder);
             data.Add("ScratchDirectory", ScratchDirectory);
             data.Add("ComponentPath", ComponentPath);
+            data.Add("PackageRepository", PackageRepository);
 
             _fileSystem.SetFile($"{settingsFolder}\\settings.json", Json.Encode(data));
         }

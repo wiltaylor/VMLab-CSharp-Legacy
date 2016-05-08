@@ -64,6 +64,7 @@ namespace VMLab.Helper
             _container.RegisterType<IScriptHelper, ScriptHelper>();
             _container.RegisterType<IIdempotentActionManager, IdempotentActionManager>(new ContainerControlledLifetimeManager());
             _container.RegisterType<ILabLibManager, LabLibManager>(new ContainerControlledLifetimeManager());
+            _container.RegisterType<IPackageManager, PackageManager>(new ContainerControlledLifetimeManager());
 
             _container.RegisterType<IVMNodeHandler, CPUVMHandler>("CPUVMHandler");
             _container.RegisterType<IVMNodeHandler, CredentialVMHandler>("CredentialVMHandler");

@@ -1715,7 +1715,7 @@ namespace VMLab.Test.Drivers
      //       FileSystem.Setup(p => p.ReadFile(ExistingVMManifest))
      //           .Returns("{ 'Name': 'ExistingTemplate', OS: 'Windows', Description: 'Test description', Author: 'Test Author', Arch: 64, GeneratorText: '#Generator Text' }");
 
-     //       Driver.AddSharedFolder(ExistingVM, "c:\\hostfolder", "mysharename", "c:\\location");
+     //       Manager.AddSharedFolder(ExistingVM, "c:\\hostfolder", "mysharename", "c:\\location");
      //       HyperVisor.Verify(h => h.ExecuteCommand(ExistingVMVmxPath, It.IsAny<IVMCredential[]>(), "c:\\windows\\system32\\cmd.exe", "/c mklink /d \"c:\\location\" \"\\vmware-host\\shared folders\\mysharename\"", false, false));
      //   }
 

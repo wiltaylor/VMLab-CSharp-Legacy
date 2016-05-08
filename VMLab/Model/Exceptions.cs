@@ -176,4 +176,12 @@ namespace VMLab.Model
             
         }
     }
+
+    public class DuplicateRepositoryException : Exception
+    {
+        public DuplicateRepositoryException(string message) : base(message)
+        {
+            
+        }
+    }
 }

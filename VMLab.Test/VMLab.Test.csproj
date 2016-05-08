@@ -81,6 +81,9 @@
     <Compile Include="Cmdlet\AddLabCredentialTest.cs" />
     <Compile Include="Cmdlet\AddLabIdempotentActionTests.cs" />
     <Compile Include="Cmdlet\AddLabSharedFolderTests.cs" />
+    <Compile Include="Cmdlet\AddPackageRepositoryTests.cs" />
+    <Compile Include="Cmdlet\GetLabPackageRepositoriesTests.cs" />
+    <Compile Include="Cmdlet\GetLabPackagesTests.cs" />
     <Compile Include="Cmdlet\ImportLabLibraryTests.cs" />
     <Compile Include="Cmdlet\ClearLabCDRomTests.cs" />
     <Compile Include="Cmdlet\ClearLabFloppyTests.cs" />
@@ -95,12 +98,14 @@
     <Compile Include="Cmdlet\InvokeLabActionTest.cs" />
     <Compile Include="Cmdlet\InvokeLabCommandTests.cs" />
     <Compile Include="Cmdlet\InvokeLabIdempotentActionTests.cs" />
+    <Compile Include="Cmdlet\InvokeLabPackageTests.cs" />
     <Compile Include="Cmdlet\InvokeLabPowerShellTests.cs" />
     <Compile Include="Cmdlet\NewLabTests.cs" />
     <Compile Include="Cmdlet\RegisterComponentTests.cs" />
     <Compile Include="Cmdlet\RegisterLabVMTests.cs" />
     <Compile Include="Cmdlet\RegisterLabActionTests.cs" />
     <Compile Include="Cmdlet\RemoveLabIdempotentActionTests.cs" />
+    <Compile Include="Cmdlet\RemoveLabRepositoryTests.cs" />
     <Compile Include="Cmdlet\RemoveLabSharedFolderTests.cs" />
     <Compile Include="Cmdlet\RemoveLabVMSnapshotTests.cs" />
     <Compile Include="Cmdlet\RestartLabVMTests.cs" />
@@ -111,6 +116,7 @@
     <Compile Include="Cmdlet\ShowLabGUITests.cs" />
     <Compile Include="Cmdlet\StartLabVMTests.cs" />
     <Compile Include="Cmdlet\StopLabVMTests.cs" />
+    <Compile Include="Cmdlet\SyncLabPackagesTests.cs" />
     <Compile Include="Drivers\VMwareHyperVisorTest.cs" />
     <Compile Include="Helper\FakeLog.cs" />
     <Compile Include="Model\Caps\VMwareCapsTest.cs" />
@@ -118,6 +124,7 @@
     <Compile Include="Model\IdempotentActionManagerTests.cs" />
     <Compile Include="Model\IdempotentActionTests.cs" />
     <Compile Include="Model\LabLibManagerTests.cs" />
+    <Compile Include="Model\PackageManagerTests.cs" />
     <Compile Include="Model\VMSettingStoreManagerTests.cs" />
     <Compile Include="Model\VMSettingStoreTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

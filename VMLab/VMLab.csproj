@@ -72,6 +72,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Cmdlet\AddLabPackageRepository.cs" />
     <Compile Include="Cmdlet\AddLabCredential.cs" />
     <Compile Include="Cmdlet\AddLabIdempotentAction.cs" />
     <Compile Include="Cmdlet\AddLabSharedFolder.cs" />
@@ -80,6 +81,8 @@
     <Compile Include="Cmdlet\ClearLabNetwork.cs" />
     <Compile Include="Cmdlet\ClearLabVMSetting.cs" />
     <Compile Include="Cmdlet\GetLabEnvironmentData.cs" />
+    <Compile Include="Cmdlet\GetLabPackageRepositories.cs" />
+    <Compile Include="Cmdlet\GetLabPackages.cs" />
     <Compile Include="Cmdlet\GetLabVMState.cs" />
     <Compile Include="Cmdlet\GetLabSharedFolder.cs" />
     <Compile Include="Cmdlet\GetLabTemplate.cs" />
@@ -90,12 +93,14 @@
     <Compile Include="Cmdlet\InvokeLabAction.cs" />
     <Compile Include="Cmdlet\InvokeLabCommand.cs" />
     <Compile Include="Cmdlet\InvokeLabIdempotentAction.cs" />
+    <Compile Include="Cmdlet\InvokeLabPackage.cs" />
     <Compile Include="Cmdlet\InvokeLabPowerShell.cs" />
     <Compile Include="Cmdlet\NewLab.cs" />
     <Compile Include="Cmdlet\RegisterComponent.cs" />
     <Compile Include="Cmdlet\RegisterLabAction.cs" />
     <Compile Include="Cmdlet\RegisterLabVM.cs" />
     <Compile Include="Cmdlet\RemoveLabIdempotentAction.cs" />
+    <Compile Include="Cmdlet\RemoveLabPackageRepository.cs" />
     <Compile Include="Cmdlet\RemoveLabSharedFolder.cs" />
     <Compile Include="Cmdlet\RemoveLabVMSnapshot.cs" />
     <Compile Include="Cmdlet\RestartLabVM.cs" />
@@ -106,6 +111,7 @@
     <Compile Include="Cmdlet\ShowLabGUI.cs" />
     <Compile Include="Cmdlet\StartVMLab.cs" />
     <Compile Include="Cmdlet\StopLabVM.cs" />
+    <Compile Include="Cmdlet\SyncLabPackages.cs" />
     <Compile Include="Drivers\IDriver.cs" />
     <Compile Include="Helper\ICmdletPathHelper.cs" />
     <Compile Include="Helper\IFileSystem.cs" />
@@ -119,6 +125,7 @@
     <Compile Include="Drivers\VMwareDriver.cs" />
     <Compile Include="Helper\Log.cs" />
     <Compile Include="Model\Caps\VMwareCaps.cs" />
+    <Compile Include="Model\Package.cs" />
     <Compile Include="Model\EnvironmentDetails.cs" />
     <Compile Include="Model\Caps\ICaps.cs" />
     <Compile Include="Model\Exceptions.cs" />
@@ -135,6 +142,8 @@
     <Compile Include="Model\IVMCredential.cs" />
     <Compile Include="Model\IVMSettingsStore.cs" />
     <Compile Include="Model\LabLibManager.cs" />
+    <Compile Include="Model\PackageManager.cs" />
+    <Compile Include="Model\PackageRepository.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="VMHandler\CPUVMHandler.cs" />
     <Compile Include="VMHandler\CredentialVMHandler.cs" />
