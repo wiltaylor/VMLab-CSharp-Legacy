@@ -4,7 +4,7 @@ using VMLab.Model;
 
 namespace VMLab.Cmdlet
 {
-    [Cmdlet(VerbsCommon.Add, "PackageRepository")]
+    [Cmdlet(VerbsCommon.Add, "LabPackageRepository")]
     public class AddLabPackageRepository : PSCmdlet
     {
         [Parameter(Mandatory =  true, Position =  1)]
@@ -23,6 +23,8 @@ namespace VMLab.Cmdlet
             env.UpdateEnvironment(this);
 
             manager.AddRepository(Name, Path);
+
+            manager.ScanPackages();
 
             base.ProcessRecord();
         }

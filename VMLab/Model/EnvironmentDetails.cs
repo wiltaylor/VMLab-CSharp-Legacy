@@ -19,12 +19,14 @@ namespace VMLab.Model
         string VMwareDiskExe { get; set; }
         string VMwareExe { get; set; }
         string CurrentAction { get; set; }
+        int SleepTimeOut { get; set; }
         IDictionary<string, object> PackageRepository { get; set; }
         PSCmdlet Cmdlet { get; set; }
         string ComponentPath { get; set; }
         string UniqueIdentifier();
         void UpdateEnvironment(PSCmdlet cmdlet);
         void PersistEnvironment();
+
     }
 
     public class EnvironmentDetails : IEnvironmentDetails
@@ -38,6 +40,7 @@ namespace VMLab.Model
         public string VMwareDiskExe { get; set; }
         public string VMwareExe { get; set; }
         public string CurrentAction { get; set; }
+        public int SleepTimeOut { get; set; }
         public IDictionary<string, object> PackageRepository { get; set; }
 
         public PSCmdlet Cmdlet { get; set; }
@@ -108,6 +111,8 @@ namespace VMLab.Model
 
             ComponentPath = !string.IsNullOrEmpty(settings.ComponentPath) ? settings.ComponentPath : string.Empty;
 
+            SleepTimeOut = settings.SleepTimeOut ?? 5000;
+
             PackageRepository = settings.PackageRepository == null
                 ? settings.PackageRepository
                 : new Dictionary<string, object>();
@@ -129,6 +134,7 @@ namespace VMLab.Model
             data.Add("ScratchDirectory", ScratchDirectory);
             data.Add("ComponentPath", ComponentPath);
             data.Add("PackageRepository", PackageRepository);
+            data.Add("SleepTimeOut", SleepTimeOut);
 
             _fileSystem.SetFile($"{settingsFolder}\\settings.json", Json.Encode(data));
         }

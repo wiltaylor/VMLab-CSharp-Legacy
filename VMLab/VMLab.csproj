@@ -112,6 +112,7 @@
     <Compile Include="Cmdlet\StartVMLab.cs" />
     <Compile Include="Cmdlet\StopLabVM.cs" />
     <Compile Include="Cmdlet\SyncLabPackages.cs" />
+    <Compile Include="Cmdlet\WaitLabVMReady.cs" />
     <Compile Include="Drivers\IDriver.cs" />
     <Compile Include="Helper\ICmdletPathHelper.cs" />
     <Compile Include="Helper\IFileSystem.cs" />

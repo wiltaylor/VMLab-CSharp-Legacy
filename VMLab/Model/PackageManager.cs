@@ -36,6 +36,9 @@ namespace VMLab.Model
             _scriptHelper = scriptHelper;
             _environment = env;
 
+            if (_environment.PackageRepository == null)
+                _environment.PackageRepository = new Dictionary<string, object>();
+
             foreach (var r in _environment.PackageRepository.Keys)
             {
                 AddRepository(r, _environment.PackageRepository[r].ToString());
@@ -53,6 +56,10 @@ namespace VMLab.Model
                 throw new FileNotFoundException("Repository path doesn't exist!");
 
             _repos.Add(new PackageRepository(name, path));
+
+            if (_environment.PackageRepository == null)
+                _environment.PackageRepository = new Dictionary<string, object>();
+
             _environment.PackageRepository.Add(name, path);
             _environment.PersistEnvironment();
 
@@ -91,6 +98,10 @@ namespace VMLab.Model
         public void RemoveRepository(string name)
         {
             _repos.RemoveAll(r => r.Name == name);
+
+            if (_environment.PackageRepository == null)
+                _environment.PackageRepository = new Dictionary<string, object>();
+
             _environment.PackageRepository.Remove(name);
             _environment.PersistEnvironment();
         }

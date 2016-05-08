@@ -117,6 +117,7 @@
     <Compile Include="Cmdlet\StartLabVMTests.cs" />
     <Compile Include="Cmdlet\StopLabVMTests.cs" />
     <Compile Include="Cmdlet\SyncLabPackagesTests.cs" />
+    <Compile Include="Cmdlet\WaitLabVMReadyTests.cs" />
     <Compile Include="Drivers\VMwareHyperVisorTest.cs" />
     <Compile Include="Helper\FakeLog.cs" />
     <Compile Include="Model\Caps\VMwareCapsTest.cs" />

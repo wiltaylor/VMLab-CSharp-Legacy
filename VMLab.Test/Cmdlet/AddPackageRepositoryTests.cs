@@ -67,6 +67,17 @@ namespace VMLab.Test.Cmdlet
         }
 
         [TestMethod]
+        public void CallingCmdletWillTriggerPackageScan()
+        {
+            Command.Parameters.Add(new CommandParameter("Name", "MyRepo"));
+            Command.Parameters.Add(new CommandParameter("Path", "c:\\repo"));
+
+            Pipe.Invoke();
+
+            Manager.Verify(m => m.ScanPackages());
+        }
+
+        [TestMethod]
         public void CallingCmdletWillUpdateEnvironmentState()
         {
             Command.Parameters.Add(new CommandParameter("Name", "MyRepo"));
