@@ -17,6 +17,9 @@
 
   clone_depth: 5
 
+  install:
+    - ps: Install-Module Pester -force
+
   before_build:
   - nuget restore
 
