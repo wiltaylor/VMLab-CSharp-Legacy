@@ -1,0 +1,24 @@
+#---------------------------------#
+#      Dev builds                 #
+#---------------------------------#
+
+-
+  version: 1.0.{build}
+  
+  skip_tags: true
+  
+  branches:
+    only:
+      - master
+
+  os: Windows Server 2012
+
+  clone_folder: c:\vmlab
+
+  clone_depth: 5
+
+  before_build:
+  - nuget restore
+
+  build_script: 
+    - ps: invoke-psake build

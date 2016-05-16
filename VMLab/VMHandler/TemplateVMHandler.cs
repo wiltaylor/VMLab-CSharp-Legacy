@@ -60,8 +60,15 @@ namespace VMLab.VMHandler
 
             if (action != "destroy") return;
 
-            if(_driver.GetVMState(vmname) == VMState.Other || _driver.GetVMState(vmname) == VMState.Ready)
-                _driver.StopVM(vmname, true);
+            try
+            {
+                if (_driver.GetVMState(vmname) == VMState.Other || _driver.GetVMState(vmname) == VMState.Ready)
+                    _driver.StopVM(vmname, true);
+            }
+            catch (Exception)
+            {
+                //do nothing because vm doesn't exist on filesystem.
+            }
 
             _driver.RemoveVM(vmname);
         }

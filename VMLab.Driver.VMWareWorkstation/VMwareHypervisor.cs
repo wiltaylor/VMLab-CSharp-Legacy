@@ -493,7 +493,7 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!string.IsNullOrEmpty(enableresults) && enableresults.StartsWith("Error:"))
                 throw new VMRunFailedToRunException("Failed to enable shared folders on vm!", enableresults);
 
-            var addresults = _vmrun.Execute($"addSharedFolder \"{vmx}\" \"{sharename}\" {hostfolder}");
+            var addresults = _vmrun.Execute($"addSharedFolder \"{vmx}\" \"{sharename}\" \"{hostfolder}\"");
 
             if(!string.IsNullOrEmpty(addresults) && addresults.StartsWith("Error:"))
                 throw new VMRunFailedToRunException("Failed to add shared folder on vm!", enableresults);

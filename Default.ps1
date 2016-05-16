@@ -68,3 +68,7 @@ Task Install -depends Build {
         Remove-Item "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\VMLab" -Force -Recurse -ErrorAction SilentlyContinue
         Copy-Item "$build_dir\Release" "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\VMLab" -Recurse -Force   
 }
+
+Task Restore {
+    Exec { &nuget.exe restore }
+}
