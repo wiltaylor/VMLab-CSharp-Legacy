@@ -7,6 +7,7 @@ namespace VMLab.Driver.VMWareWorkstation
     {
         void ConnectToVM(string vmx);
         void WaitOnTools(int timeout = int.MaxValue);
+        void Clone(string targetvmx, string snapshotname, bool linked);
     }
 
     public class Vix : IVix
@@ -44,6 +45,31 @@ namespace VMLab.Driver.VMWareWorkstation
 
             _vm = (IVM2)((object[])results)[0];
             CloseVixObject(job);
+        }
+
+        public void Clone(string targetvmx, string snapshotname, bool linked)
+        {
+            
+            var snapshot = default(ISnapshot);
+            var err = _vm.GetNamedSnapshot(snapshotname, out snapshot);
+
+            if(_lib.ErrorIndicatesFailure(err))
+                throw new VixException($"Error retriving snapshot {snapshotname}! Error code: {err}");
+
+            var results = default(object);
+            var job = _vm.Clone(snapshot, linked ? Constants.VIX_CLONETYPE_LINKED : Constants.VIX_CLONETYPE_FULL, targetvmx, 0, null, null);
+
+            err = job.Wait(new[] {Constants.VIX_PROPERTY_JOB_RESULT_HANDLE}, ref results);
+            CloseVixObject(job);
+
+            if(_lib.ErrorIndicatesFailure(err))
+                throw new VixException($"Error creating clone. Error core: {err}");
+
+            var newvm = (IVM2) ((object[]) results)[0];
+
+            CloseVixObject(newvm);
+            CloseVixObject(snapshot);
+
         }
 
         public void WaitOnTools(int timeout = int.MaxValue)

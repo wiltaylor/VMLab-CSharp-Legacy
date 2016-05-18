@@ -312,6 +312,7 @@ namespace VMLab.Driver.VMWareWorkstation
             _log.Info($"Setting cpus on {vmname} to CPUS: {cpus} Cores: {cores}");
 
             var vmx = GetVMPath(vmname, VMPath.VMX);
+
             _hypervisor.WriteSetting(vmx, "numvcpus", (cpus * cores).ToString());
             _hypervisor.WriteSetting(vmx, "cpuid.coresPerSocket", cores.ToString());
         }

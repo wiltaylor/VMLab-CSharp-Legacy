@@ -75,27 +75,17 @@ namespace VMLab.Driver.VMWareWorkstation
             if(_filesystem.FileExists(target))
                 throw new VMXAlreadyExistsException("Can't create clone when vm already exists at destination!", target);
 
-            string results;
+            var vix = ServiceDiscovery.GetInstance().GetObject<IVix>();
+            vix.ConnectToVM(template);
 
             switch (type)
             {
                 case CloneType.Full:
-                    results = _vmrun.Execute($"clone \"{template}\" \"{target}\" full -snapshot=\"{snapshot}\"");
+                    vix.Clone(target, snapshot, false);
                     break;
                 case CloneType.Linked:
-                    results = _vmrun.Execute($"clone \"{template}\" \"{target}\" linked -snapshot=\"{snapshot}\"");
+                    vix.Clone(target, snapshot, true);
                     break;
-                default:
-                    throw new NotImplementedException();
-            }
-            
-
-            if(results.StartsWith("Error: Invalid snapshot name"))
-                throw new SnapshotDoesntExistException("Can't clone vm when snapshot doesn't exist!", template, snapshot);
-
-            if (results.Contains("Error:"))
-            {
-                throw new VMRunFailedToRunException("Unknown error!", results);
             }
         }
 
@@ -111,7 +101,8 @@ namespace VMLab.Driver.VMWareWorkstation
 
             var updated = false;
             for (var i = 0; i < lines.Count; i++)
-                if (lines[i].StartsWith($"{name} = \""))
+
+                if(Regex.IsMatch(lines[i], name + ".{1,2}=.{1,2}\".+\"$")) //Bug Fix: where double spaces got created when using vix api.
                 {
                     lines[i] = $"{name} = \"{value}\"";
                     updated = true;
