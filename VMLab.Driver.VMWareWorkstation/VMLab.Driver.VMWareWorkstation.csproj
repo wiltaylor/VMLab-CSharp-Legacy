@@ -61,9 +61,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Exceptions.cs" />
     <Compile Include="IVMwareDiskExe.cs" />
     <Compile Include="IVMwareExe.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Vix.cs" />
     <Compile Include="VMRun.cs" />
     <Compile Include="VMwareCaps.cs" />
     <Compile Include="VMwareDriver.cs" />
@@ -78,6 +80,26 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <COMReference Include="VixCOM">
+      <Guid>{7A474EE3-0062-4239-AE91-134AC9BD5FD3}</Guid>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>tlbimp</WrapperTool>
+      <Isolated>False</Isolated>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+    </COMReference>
+    <COMReference Include="VMwareBridgeLib">
+      <Guid>{16A76DDB-46C2-4AB4-9A74-755B80DDEB4E}</Guid>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>tlbimp</WrapperTool>
+      <Isolated>False</Isolated>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </COMReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

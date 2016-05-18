@@ -627,18 +627,7 @@ namespace VMLab.Driver.VMWareWorkstation
             if (username != null)
                 creds = new IVMCredential[] {new VMCredential(username, password)};
 
-            if (GetVMState(vmname) == VMState.Shutdown)
-            {
-                _log.Error("ExecuteCommand:Can't send command to VM because it is shutdown!");
-                throw new GuestVMPoweredOffException("Can't send command to VM because it is shutdown!");
-            }
-            
-            _log.Debug("Waiting for VM to become ready!");
-
-            while (GetVMState(vmname) != VMState.Ready)
-            {
-                Thread.Sleep(1000); //sleep for a second before checking vm state.
-            }
+            _hypervisor.WaitForVMToBeReady(vmx);
 
             _log.Debug($"Executing command! Path: {path} Args: {args} NoWait: {noWait} Interactive: {interactive}");
 
@@ -681,18 +670,7 @@ namespace VMLab.Driver.VMWareWorkstation
                 command = $"{remotescriptpath} > /tmp/{stdoutfilename} 2> /tmp/{stderrfilename}";
             }
 
-            if (GetVMState(vmname) == VMState.Shutdown)
-            {
-                _log.Error("ExecuteCommandWithResult:Can't send command to VM because it is shutdown!");
-                throw new GuestVMPoweredOffException("Can't send command to VM because it is shutdown!");
-            }
-
-            _log.Debug("Waiting for VM to become ready!");
-
-            while (GetVMState(vmname) != VMState.Ready)
-            {
-                Thread.Sleep(1000); //sleep for a second before checking vm state.
-            }
+            _hypervisor.WaitForVMToBeReady(vmx);
 
             _log.Debug("VM ready. Creating scripts to copy to vm.");
 
@@ -758,18 +736,7 @@ namespace VMLab.Driver.VMWareWorkstation
             var datafile = $"{id}.xml";
             var result = new PowershellCommandResult();
 
-            if (GetVMState(vmname) == VMState.Shutdown)
-            {
-                _log.Error("ExecutePowershell:Can't send command to VM because it is shutdown!");
-                throw new GuestVMPoweredOffException("Can't send command to VM because it is shutdown!");
-            }
-
-            _log.Debug("Waiting for VM to become ready!");
-
-            while (GetVMState(vmname) != VMState.Ready)
-            {
-                Thread.Sleep(1000); //sleep for a second before checking vm state.
-            }
+            _hypervisor.WaitForVMToBeReady(vmx);
 
             _log.Debug("VM is ready copying scripts over and executing!");
 
@@ -851,18 +818,7 @@ namespace VMLab.Driver.VMWareWorkstation
             if(existingfolders != null)
                 folderarray.AddRange(existingfolders);
 
-            if (GetVMState(vmname) == VMState.Shutdown)
-            {
-                _log.Error("AddSharedFolder:Can't send command to VM because it is shutdown!");
-                throw new GuestVMPoweredOffException("Can't send command to VM because it is shutdown!");
-            }
-
-            _log.Debug("Waiting for VM to become ready!");
-
-            while (GetVMState(vmname) != VMState.Ready)
-            {
-                Thread.Sleep(1000); //sleep for a second before checking vm state.
-            }
+            _hypervisor.WaitForVMToBeReady(vmx);
 
             _log.Info($"Adding shared folder to VM! VM: {vmname} ShareName: {sharename} HostPath: {hostpath} GuestPath: {guestpath}");
 
@@ -1122,6 +1078,12 @@ namespace VMLab.Driver.VMWareWorkstation
         public IVMSettingsStore GetVMSettingStore(string vmname)
         {
             return _storeManager.GetStore(GetVMPath(vmname, VMPath.Store));
+        }
+
+        public void WaitVMReady(string vmname)
+        {
+            var vmx = GetVMPath(vmname, VMPath.VMX);
+            _hypervisor.WaitForVMToBeReady(vmx);
         }
 
         public void CreateLabFile(string templateName)

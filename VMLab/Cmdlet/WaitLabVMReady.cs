@@ -36,7 +36,7 @@ namespace VMLab.Cmdlet
             }
             else
             {
-                while (vmstate != VMState.Ready)
+                /*while (vmstate != VMState.Ready)
                 {
                     vmstate = driver.GetVMState(VMName);
 
@@ -45,7 +45,9 @@ namespace VMLab.Cmdlet
                             "VM Power state is set to shutdown while waiting for it to become available.");
 
                     Thread.Sleep(env.SleepTimeOut);
-                }
+                }*/
+
+                driver.WaitVMReady(VMName);
             }
 
             base.ProcessRecord();

@@ -71,5 +71,6 @@ namespace VMLab.Drivers
         void ClearNetworkSettings(string vmname);
         void ClearFloppy(string vmname);
         IVMSettingsStore GetVMSettingStore(string vmname);
+        void WaitVMReady(string vmname);
     }
 }

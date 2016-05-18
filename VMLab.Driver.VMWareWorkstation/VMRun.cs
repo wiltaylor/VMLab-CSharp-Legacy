@@ -15,7 +15,11 @@ namespace VMLab.Driver.VMWareWorkstation
     {
         private readonly EnvironmentDetails _environment;
 
-        private readonly string[] _retryErrors = { "Error: The VMware Tools are not running in the virtual machine:" };
+        private readonly string[] _retryErrors =
+        {
+            "Error: The VMware Tools are not running in the virtual machine:",
+            "Error: VMware Tools are not running in the guest"
+        };
 
 
         public VMRun(EnvironmentDetails env)

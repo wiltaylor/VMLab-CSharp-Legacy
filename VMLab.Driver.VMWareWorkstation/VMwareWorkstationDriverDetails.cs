@@ -1,7 +1,11 @@
-﻿using Microsoft.Practices.Unity;
+﻿using System;
+using System.IO;
+using System.Reflection;
+using Microsoft.Practices.Unity;
 using Microsoft.Win32;
 using VMLab.Drivers;
 using VMLab.Helper;
+using VMLab.Model;
 using VMLab.Model.Caps;
 
 namespace VMLab.Driver.VMWareWorkstation
@@ -26,7 +30,18 @@ namespace VMLab.Driver.VMWareWorkstation
             container.RegisterType<IVMRun, VMRun>();
             container.RegisterType<IVMwareDiskExe, VMwareDiskExe>();
             container.RegisterType<IVMwareExe, VMwareExe>();
-            
+            container.RegisterType<IVix, Vix>();
+
+            try
+            {
+                var modulefolder = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(Assembly.GetAssembly(typeof(EnvironmentDetails)).CodeBase).Path));
+                Assembly.LoadFile($"{modulefolder}\\Interop.VixCOM.dll");
+            }
+            catch (Exception)
+            {
+                //already loaded.
+            }
+
         }
     }
 }

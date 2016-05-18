@@ -49,6 +49,7 @@ namespace VMLab.Driver.VMWareWorkstation
         void ClearCDRom(string vmx);
         void ClearNetworkSettings(string vmx);
         void ClearFloppy(string vmx);
+        void WaitForVMToBeReady(string vmx);
     }
 
     public class VMwareHypervisor : IVMwareHypervisor
@@ -706,6 +707,15 @@ namespace VMLab.Driver.VMWareWorkstation
             text.Add("floppy0.present = \"FALSE\"");
 
             _filesystem.SetFile(vmx, string.Join(Environment.NewLine, text));
+        }
+
+        public void WaitForVMToBeReady(string vmx)
+        {
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.WaitOnTools();
+            }
         }
     }
 }
