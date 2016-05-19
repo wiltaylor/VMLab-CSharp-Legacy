@@ -837,7 +837,7 @@ namespace VMLab.Test.Drivers
 	    }
 
         [TestMethod]
-	    public void CallingVMStateWillReturnReadyIfVMToolsAreRunningOnWindows()
+	    public void CallingVMStateWillReturnReadyIfVMToolsAreRunning()
 	    {
 
             //Setting up password retrival
@@ -850,42 +850,11 @@ namespace VMLab.Test.Drivers
                 .Returns(
                     "{ 'Name': 'ExistingTemplate', OS: 'Windows', Description: 'Test description', Author: 'Test Author', Arch: 64, GeneratorText: '#Generator Text' }");
 
-            HyperVisor.Setup(h => h.GetRunningVMs()).Returns(new[] { ExistingVMVmxPath });
-
-            HyperVisor.Setup(
-                h =>
-                    h.FileExistInGuest(ExistingVMVmxPath,
-                        It.Is<IVMCredential[]>(
-                            a => a.Any(c => c.Username == "ValidUsername" && c.Password == "ValidPassword")),
-                        "c:\\windows\\explorer.exe")).Returns(true);
+            HyperVisor.Setup(h => h.GetVMPowerState(ExistingVMVmxPath)).Returns(VixPowerState.Ready);
 
             Assert.IsTrue(Driver.GetVMState("ExistingVM") == VMState.Ready);
 	    }
 
-	    [TestMethod]
-	    public void CallingVMStateWillReturnReadyIfVMToolsAreRunningOnLinux()
-	    {
-            //Setting up password retrival
-            var store = new Mock<IVMSettingsStore>();
-            SettingStoreManager.Setup(s => s.GetStore(ExistingVMStore)).Returns(store.Object);
-            store.Setup(s => s.ReadSetting<ArrayList>("Credentials")).Returns(new ArrayList { new Dictionary<string, object>() { { "Username", "ValidUsername" }, { "Password", "ValidPassword" } } });
-
-            //Set manifest to linux
-            FileSystem.Setup(m => m.ReadFile(ExistingVMManifest))
-                .Returns(
-                    "{ 'Name': 'ExistingTemplate', OS: 'Unix', Description: 'Test description', Author: 'Test Author', Arch: 64, GeneratorText: '#Generator Text' }");
-
-            HyperVisor.Setup(h => h.GetRunningVMs()).Returns(new[] { ExistingVMVmxPath });
-
-            HyperVisor.Setup(
-                h =>
-                    h.DirectoryExistInGuest(ExistingVMVmxPath,
-                        It.Is<IVMCredential[]>(
-                            a => a.Any(c => c.Username == "ValidUsername" && c.Password == "ValidPassword")),
-                        "/dev")).Returns(true);
-
-            Assert.IsTrue(Driver.GetVMState("ExistingVM") == VMState.Ready);
-        }
 
         [TestMethod]
         public void CallingVMStateWillReturnOtherIfVMToolsAreNotReadyButMachineIsRunning()
@@ -896,37 +865,10 @@ namespace VMLab.Test.Drivers
             SettingStoreManager.Setup(s => s.GetStore(ExistingVMStore)).Returns(store.Object);
             store.Setup(s => s.ReadSetting<IVMCredential[]>("Credentials")).Returns(new IVMCredential[] { new VMCredential("ValidUsername", "ValidPassword") });
 
-            HyperVisor.Setup(h => h.GetRunningVMs()).Returns(new[] { TestDirectory.ToLower() + $"\\_vm\\existingvm\\{EnvironmentRandomName.ToLower()}\\existingvm.vmx" });
-            HyperVisor.Setup(
-                h =>
-                    h.FileExistInGuest(TestDirectory.ToLower() + $"\\_vm\\existingvm\\{EnvironmentRandomName.ToLower()} existingvm.vmx", 
-                        It.Is<IVMCredential[]>(a => a.Any(c => c.Username == "ValidUsername" && c.Password == "ValidPassword")),
-                        "c:\\windows\\explorer.exe")).Throws<ApplicationException>();
+            HyperVisor.Setup(h => h.GetVMPowerState(ExistingVMVmxPath)).Returns(VixPowerState.Pending);
 
             Assert.IsTrue(Driver.GetVMState("ExistingVM") == VMState.Other);
         }
-
-        [TestMethod]
-        [ExpectedException(typeof(InvalidCredentialException))]
-	    public void CallingVMStateWillThrowExceptionIfCredentialsAreIncorrect()
-	    {
-            //Setting up password retrival
-            var store = new Mock<IVMSettingsStore>();
-            SettingStoreManager.Setup(s => s.GetStore(ExistingVMStore)).Returns(store.Object);
-            SetupCredentialsInStore(store, new ArrayList()
-            {
-                new Dictionary<string,object>() { {"Username", "BadUsername"},{ "Password", "BadPassword" }}
-            });
-
-            HyperVisor.Setup(h => h.GetRunningVMs()).Returns(new[] { TestDirectory.ToLower() + $"\\_vm\\existingvm\\{EnvironmentRandomName.ToLower()}\\existingvm.vmx" });
-            HyperVisor.Setup(
-                h =>
-                    h.FileExistInGuest(ExistingVMVmxPath, It.Is<IVMCredential[]>(
-                            a => a.Any(c => c.Username == "BadUsername" && c.Password == "BadPassword")),
-                            "c:\\windows\\explorer.exe")).Throws<InvalidCredentialException>();
-
-            Driver.GetVMState("ExistingVM");
-	    }
         #endregion
 
         #region "Credentials"
@@ -1210,20 +1152,6 @@ namespace VMLab.Test.Drivers
             HyperVisor.Verify(h => h.ExecuteCommand(ExistingVMVmxPath, It.IsAny<IVMCredential[]>(), "c:\\test.exe", "some commandline arguments here", false, false) );
         }
 
-        [TestMethod]
-        [ExpectedException(typeof(GuestVMPoweredOffException))]
-        public void CallingExecuteCommandOnExistingVMWillThrowIfVMIsPoweredOff()
-        {
-            //Setting up password retrival
-            var store = new Mock<IVMSettingsStore>();
-
-            SettingStoreManager.Setup(s => s.GetStore(ExistingVMStore)).Returns(store.Object);
-            store.Setup(s => s.ReadSetting<IVMCredential[]>("Credentials")).Returns(new IVMCredential[] { new VMCredential("ValidUsername", "ValidPassword") });
-            HyperVisor.Setup(h => h.GetRunningVMs()).Returns(new string[]{});
-            HyperVisor.Setup(h => h.FileExistInGuest(ExistingVMVmxPath, new IVMCredential[] { new VMCredential("ValidUsername", "ValidPassword") }, "c:\\windows\\explorer.exe")).Returns(true);
-
-            Driver.ExecuteCommand(ExistingVM, "c:\\test.exe", "some commandline arguments here");
-        }
 
         [TestMethod]
         [ExpectedException(typeof(ApplicationException))]

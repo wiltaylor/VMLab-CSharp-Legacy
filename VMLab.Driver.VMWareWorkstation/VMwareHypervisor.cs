@@ -50,18 +50,17 @@ namespace VMLab.Driver.VMWareWorkstation
         void ClearNetworkSettings(string vmx);
         void ClearFloppy(string vmx);
         void WaitForVMToBeReady(string vmx);
+        VixPowerState GetVMPowerState(string vmx);
     }
 
     public class VMwareHypervisor : IVMwareHypervisor
     {
-        private readonly IVMRun _vmrun;
         private readonly IFileSystem _filesystem;
         private readonly IVMwareExe _vMwareExe;
         private readonly IVMwareDiskExe _vMwareDiskExe;
 
-        public VMwareHypervisor(IVMRun vmrun, IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe)
+        public VMwareHypervisor(IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe)
         {
-            _vmrun = vmrun;
             _filesystem = filesystem;
             _vMwareExe = vmwareexe;
             _vMwareDiskExe = vmwarediskexe;
@@ -161,69 +160,83 @@ namespace VMLab.Driver.VMWareWorkstation
 
         public string[] GetRunningVMs()
         {
-           return _vmrun.Execute("list").Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).Where(s => !s.StartsWith("Total running VMs:")).ToArray();
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                return vix.GetRunningVMs();
+            }
+        }
+
+        private void LoginToVM(string vmx, IVix vix, IVMCredential[] credentials, bool interactive = false)
+        {
+            for (var r = 0; r < 5; r++)
+            {
+                foreach (var c in credentials)
+                {
+                    try
+                    {
+                        vix.WaitOnTools();
+
+                        while (GetVMPowerState(vmx) != VixPowerState.Ready)
+                        {
+                            Thread.Sleep(1000);
+                            if (GetVMPowerState(vmx) == VixPowerState.Off)
+                                throw new GuestVMPoweredOffException(
+                                    "VM was powered off while trying to login to guest api!");
+                        }
+
+
+                        vix.LoginToGuest(c.Username, c.Password, interactive);
+                        return;
+                    }
+                    catch (GuestVMPoweredOffException e)
+                    {
+                        throw e;
+                    }
+                    catch
+                    {
+                        //skip
+                    }
+                }
+                Thread.Sleep(10000);
+            }
+
+            throw new VixException("Unable to login with any credentails!");
         }
 
         public bool FileExistInGuest(string vmx, IVMCredential[] credentials, string path)
         {
-            var userfailcount = 0;
-            var lastfailmessage = "No VMRun Failed Result";
-            foreach (var results in credentials.Select(c => _vmrun.Execute($"-T ws -gu {c.Username} -gp {c.Password} fileExistsInGuest \"{vmx}\" \"{path}\"")))
+            if (GetVMPowerState(vmx) == VixPowerState.Off)
+                throw new GuestVMPoweredOffException("Can't check file exists when VM is powered off!");
+
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-                if (results.StartsWith("The file exists."))
-                    return true;
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, credentials);
 
-                if (results.StartsWith("The file does not exist."))
-                    return false;
+                var result = vix.FileExistInGuest(path);
 
-                if (results.StartsWith("Error: Invalid user name or password for the guest OS."))
-                {
-                    userfailcount++;
-                    continue;
-                }
+                vix.LoginOutOfGuest();
 
-                if (results.StartsWith("Error: The virtual machine is not powered on:"))
-                    throw new GuestVMPoweredOffException("Guest is not powerd on!");
-
-                if (results.StartsWith("Error:"))
-                    lastfailmessage = results;
+                return result;
             }
-
-            if(userfailcount == credentials.Length)
-                throw new BadGuestCredentialsException("Bad user name and password passed to guest os!", credentials);
-            
-            throw new VMRunFailedToRunException("Was unable to determine if file existed in vm!", lastfailmessage);
         }
 
         public bool DirectoryExistInGuest(string vmx, IVMCredential[] credentials, string path)
         {
-            var userfailcount = 0;
-            var lastfailmessage = "No VMRun Failed Result";
-            foreach (var results in credentials.Select(c => _vmrun.Execute($"-T ws -gu {c.Username} -gp {c.Password} directoryExistsInGuest \"{vmx}\" \"{path}\"")))
+            if (GetVMPowerState(vmx) == VixPowerState.Off)
+                throw new GuestVMPoweredOffException("Can't check directory exists when VM is powered off!");
+
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-                if (results.StartsWith("The directory exists"))
-                    return true;
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, credentials);
 
-                if (results.StartsWith("The directory does not exist."))
-                    return false;
+                var result = vix.DirectoryExistInGuest(path);
 
-                if (results.StartsWith("Error: Invalid user name or password for the guest OS."))
-                {
-                    userfailcount++;
-                    continue;
-                }
+                vix.LoginOutOfGuest();
 
-                if (results.StartsWith("Error: The virtual machine is not powered on:"))
-                    throw new GuestVMPoweredOffException("Guest is not powerd on!");
-
-                if (results.StartsWith("Error:"))
-                    lastfailmessage = results;
+                return result;
             }
-
-            if (userfailcount == credentials.Length)
-                throw new BadGuestCredentialsException("Bad user name and password passed to guest os!", credentials);
-
-            throw new VMRunFailedToRunException("Was unable to determine if directory existed in vm!", lastfailmessage);
         }
 
         public void StartVM(string vmx)
@@ -231,10 +244,11 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't start vmx that doesn't exist!", vmx);
 
-            var result = _vmrun.Execute($"start \"{vmx}\" nogui");
-
-            if(result.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to start vm.", result);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.PowerOnVM();
+            }
         }
 
         public void StopVM(string vmx, bool force)
@@ -242,10 +256,11 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't stop vmx that doesn't exist!", vmx);
 
-            var result = _vmrun.Execute(force ? $"stop \"{vmx}\" hard" : $"stop \"{vmx}\" soft");
-
-            if (result.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to stop vm.", result);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.PowerOffVM(force);
+            }
         }
 
         public void ResetVM(string vmx, bool force)
@@ -253,10 +268,11 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't reset vmx that doesn't exist!", vmx);
 
-            var result = _vmrun.Execute(force ? $"reset \"{vmx}\" hard" : $"reset \"{vmx}\" soft");
-
-            if (result.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to reset vm.", result);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.ResetVM(force);
+            }
         }
 
         public string ReadSetting(string vmx, string setting)
@@ -288,10 +304,11 @@ namespace VMLab.Driver.VMWareWorkstation
 
             if (_filesystem.FileExists(vmx))
             {
-                var results = _vmrun.Execute($"deleteVM \"{vmx}\"");
-
-                if (results.StartsWith("Error:"))
-                    throw new VMRunFailedToRunException("Failed To remove VM.", results);
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    vix.Delete();
+                }
             }
 
             if(_filesystem.FolderExists(vmfolder))
@@ -314,28 +331,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FileExists(hostPath))
                 throw new FileNotFoundException("Can't find host file!");
 
-            var badcredcount = 0;
-            var lasterror = "";
-
-            foreach (var result in creds.Select(c => _vmrun.Execute($"-T ws -gu {c.Username} -gp {c.Password} CopyFileFromHostToGuest \"{vmx}\" \"{hostPath}\" \"{guestPath}\"")))
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-                if (string.IsNullOrEmpty(result))
-                    return;
-
-                if(result.StartsWith("Error: A file was not found"))
-                    throw new FileDoesntExistInGuest("Can't copy file to guest!", vmx, guestPath);
-
-                if (result.StartsWith("Error: Invalid user name or password for the guest OS"))
-                    badcredcount++;
-
-                if (result.StartsWith("Error:"))
-                    lasterror = result;
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, creds);
+                vix.CopyFileToGuest(hostPath, guestPath);
+                vix.LoginOutOfGuest();
             }
-
-            if(badcredcount == creds.Length)
-                throw new BadGuestCredentialsException("All supplied credentials are invald!", creds);
-
-            throw new VMRunFailedToRunException("Unknown error!", lasterror);
 
         }
 
@@ -346,32 +348,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FolderExists(Path.GetDirectoryName(hostPath)))
                 throw new FileNotFoundException("Invalid host path. Folder target file is being created in doesn't exist!");
 
-            var lasterror = string.Empty;
-            var badcredcount = 0;
-                
-            foreach (var results in creds.Select(c => _vmrun.Execute($"-T ws -gu {c.Username} -gp {c.Password} CopyFileFromGuestToHost \"{vmx}\" \"{guestPath}\" \"{hostPath}\"")))
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-
-                if (string.IsNullOrEmpty(results))
-                    return;
-
-                if(results.StartsWith("Error: A file was not found")) 
-                    throw new FileDoesntExistInGuest("Can't copy file from guest because it doesn't exist!", vmx, guestPath);
-
-                if (results.StartsWith("Error: Invalid user name or password for the guest OS"))
-                {
-                    badcredcount++;
-                    continue;
-                }
-
-                if (results.StartsWith("Error:"))
-                    lasterror = results;
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, creds);
+                vix.CopyFileFromGuest(hostPath, guestPath);
+                vix.LoginOutOfGuest();
             }
-
-            if(badcredcount == creds.Length)
-                throw new BadGuestCredentialsException("Bad username and password for guest vm", creds);
-
-            throw new VMRunFailedToRunException("Unknown error", lasterror);
         }
 
         public void DeleteFileInGuest(string vmx, IVMCredential[] creds, string path)
@@ -379,31 +362,14 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't delete file from vm when vmx doesnt exist!", vmx);
 
-            var lasterror = "";
-            var badcredcount = 0;
-
-            foreach (var results in creds.Select(c => _vmrun.Execute($"-T ws -gu {c.Username} -gp {c.Password} deleteFileInGuest \"{vmx}\" \"{path}\"")))
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-                if (string.IsNullOrEmpty(results))
-                    return;
-
-                if(results.StartsWith("Error: A file was not found"))
-                    throw new FileDoesntExistInGuest("Can't delete file because it doesnt exist in guest.", vmx, path);
-
-                if (results.StartsWith("Error: Invalid user name or password for the guest OS"))
-                {
-                    badcredcount++;
-                    continue;
-                }
-
-                if (results.StartsWith("Error:"))
-                    lasterror = results;
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, creds);
+                vix.DeleteFileInGuest(path);
+                vix.LoginOutOfGuest();
             }
-            
-            if(badcredcount == creds.Length)
-                throw new BadGuestCredentialsException("Incorrect guest username or password!", creds);
 
-            throw new VMRunFailedToRunException("Unknown error when deleting file!", lasterror);
         }
 
         public void ExecuteCommand(string vmx, IVMCredential[] creds, string path, string args, bool noWait, bool interactive)
@@ -411,65 +377,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't execute command when vmx doesn't exist!", vmx);
 
-            var badcredcount = 0;
-            var lasterrormessage = "";
-            var retrycount = 5;
-            var doretry = true;
-
-            var switches = new List<string>();
-
-            if(noWait)
-                switches.Add("-nowait");
-
-            if(interactive)
-                switches.Add("-interactive");
-
-            var waitswitch = $" {string.Join(" ", switches.ToArray())} ";
-
-            if (waitswitch == "  ")
-                waitswitch = " ";
-
-            while (doretry && retrycount > 0)
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
-                doretry = false;
-                retrycount--;
-
-                foreach (var c in creds)
-                {
-                    var results =
-                        _vmrun.Execute(
-                            $"-T ws -gu {c.Username} -gp {c.Password} runProgramInGuest \"{vmx}\"{waitswitch}\"{path}\" {args}");
-
-                    if (string.IsNullOrEmpty(results))
-                        return;
-
-                    if (results.StartsWith("Guest program exited with non-zero exit code"))
-                        return;
-
-                    if (results.StartsWith("Error: A file was not found"))
-                        throw new FileDoesntExistInGuest("Can't execute command because can't find program in guest!",
-                            vmx, path);
-
-                    if (results.StartsWith("Error: Invalid user name or password for the guest OS"))
-                    {
-                        badcredcount++;
-                        continue;
-                    }
-
-                    if (results.StartsWith("Error:"))
-                        lasterrormessage = results;
-                }
-
-                if (lasterrormessage != $"Error: Unknown error{Environment.NewLine}") continue;
-
-                doretry = true;
-                Thread.Sleep(1000);
+                vix.ConnectToVM(vmx);
+                LoginToVM(vmx, vix, creds, interactive);
+                vix.ExecuteCommand(path, args, false, !noWait);
+                vix.LoginOutOfGuest();
             }
-
-            if(badcredcount == creds.Length)
-                throw new BadGuestCredentialsException("Username and password is incorrect!", creds);
-
-            throw new VMRunFailedToRunException("Unknown error", lasterrormessage);
         }
 
         public void AddSharedFolder(string vmx, string hostfolder, string sharename)
@@ -480,15 +394,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FolderExists(hostfolder))
                 throw new FileNotFoundException("Can't find host folder!");
 
-            var enableresults = _vmrun.Execute($"enableSharedFolders \"{vmx}\"");           
-            
-            if(!string.IsNullOrEmpty(enableresults) && enableresults.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to enable shared folders on vm!", enableresults);
-
-            var addresults = _vmrun.Execute($"addSharedFolder \"{vmx}\" \"{sharename}\" \"{hostfolder}\"");
-
-            if(!string.IsNullOrEmpty(addresults) && addresults.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to add shared folder on vm!", enableresults);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.WaitOnTools();
+                vix.EnableSharedFolders();
+                vix.AddShareFolder(hostfolder, sharename);
+            }
         }
 
         public void RemoveSharedFolder(string vmx, string sharename)
@@ -496,10 +408,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't remove shared folder from vm because vmx doesn't exist!", vmx);
 
-            var result = _vmrun.Execute($"removeSharedFolder \"{vmx}\" \"{sharename}\"");
-
-            if(!string.IsNullOrEmpty(result)&& result.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to remove shared folder!", result);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.WaitOnTools();
+                vix.EnableSharedFolders();
+                vix.RemoveSharedFolder(sharename);
+            }
         }
 
         public void CreateSnapshot(string vmx, string snapshotname)
@@ -507,10 +422,13 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't create snapshot because vmx is not found!", vmx);
 
-            var results = _vmrun.Execute($"snapshot \"{vmx}\" \"{snapshotname}\"");
-
-            if(!string.IsNullOrEmpty(results) && results.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to create snapshot!", results);
+            var memdump = GetVMPowerState(vmx) == VixPowerState.Ready;
+            
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.CreateSnapshot(snapshotname, $"Snapshot created by VMLab at {DateTime.Now}" ,memdump);
+            }
         }
 
         public void RemoveSnapshot(string vmx, string snapshotname)
@@ -518,10 +436,11 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't remove snapshot because vmx is not found!", vmx);
 
-            var results = _vmrun.Execute($"deleteSnapshot \"{vmx}\" \"{snapshotname}\"");
-
-            if (!string.IsNullOrEmpty(results) && results.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to remove snapshot!", results);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.RemoveSnapshot(snapshotname);
+            }
         }
 
         public void RevertToSnapshot(string vmx, string snapshotname)
@@ -529,10 +448,11 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't revert to snapshot because vmx is not found!", vmx);
 
-            var results = _vmrun.Execute($"revertToSnapshot \"{vmx}\" \"{snapshotname}\"");
-
-            if (!string.IsNullOrEmpty(results) && results.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to revert to snapshot!", results);
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                vix.RevertToSnapshot(snapshotname);
+            }
         }
 
         public string[] GetSnapshots(string vmx)
@@ -540,15 +460,12 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't list snapshots because vmx is not found!", vmx);
 
-            var results = _vmrun.Execute($"listSnapshots \"{vmx}\"");
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                return vix.GetSnapshots();
+            }
 
-            if(string.IsNullOrEmpty(results))
-                return new string[] {};
-
-            if(results.StartsWith("Error:"))
-                throw new VMRunFailedToRunException("Failed to get snapshots from vm!", results);
-            
-            return results.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).Where(s => !s.StartsWith("Total snapshots:")).ToArray();
         }
 
         public void ConvertToFullDisk(string vmx)
@@ -706,6 +623,15 @@ namespace VMLab.Driver.VMWareWorkstation
             {
                 vix.ConnectToVM(vmx);
                 vix.WaitOnTools();
+            }
+        }
+
+        public VixPowerState GetVMPowerState(string vmx)
+        {
+            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            {
+                vix.ConnectToVM(vmx);
+                return vix.PowerState();
             }
         }
     }

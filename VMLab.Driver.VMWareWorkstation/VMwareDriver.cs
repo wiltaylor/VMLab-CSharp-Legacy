@@ -328,33 +328,19 @@ namespace VMLab.Driver.VMWareWorkstation
                 throw new ApplicationException("Can't check state of vm that doesnt exist!");
             }
 
-            if (_hypervisor.GetRunningVMs().All(v => !string.Equals(v, vmx, StringComparison.CurrentCultureIgnoreCase)))
-                return VMState.Shutdown;
-
-            var metadata = Json.Decode(_fileSystem.ReadFile(GetVMPath(vmname, VMPath.Manifest)));
-
-            var credentials = GetCredential(vmname);
-
-            try
+            switch (_hypervisor.GetVMPowerState(vmx))
             {
-                if (metadata.OS == "Windows")
-                    if (_hypervisor.FileExistInGuest(vmx, credentials, "c:\\windows\\explorer.exe"))
-                        return VMState.Ready;
-
-                if (metadata.OS == "Unix")
-                    if (_hypervisor.DirectoryExistInGuest(vmx, credentials, "/dev"))
-                        return VMState.Ready;
+                case VixPowerState.Ready:
+                    return VMState.Ready;
+                case VixPowerState.Off:
+                    return VMState.Shutdown;
+                case VixPowerState.Pending:
+                    return VMState.Other;
+                case VixPowerState.Suspended:
+                    return VMState.Other;
+                default:
+                    return VMState.Other;
             }
-            catch (GuestVMPoweredOffException)
-            {
-                return VMState.Shutdown;
-            }
-            catch (VMRunFailedToRunException)
-            {
-                return VMState.Other;
-            }
-            
-            return VMState.Other;
         }
 
         public void AddCredential(string vmname, string username, string password)
@@ -371,7 +357,7 @@ namespace VMLab.Driver.VMWareWorkstation
 
             var store = _storeManager.GetStore(GetVMPath(vmname, VMPath.Store));
             var credentials = new List<IVMCredential>();
-            var storedata = GetCredential(vmname);//  store.ReadSetting<IVMCredential[]>("Credentials");
+            var storedata = GetCredential(vmname);
 
             if(storedata != null)
                 credentials.AddRange(storedata);
