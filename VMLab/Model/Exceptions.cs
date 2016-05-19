@@ -62,17 +62,6 @@ namespace VMLab.Model
         }
     }
 
-    public class VMRunFailedToRunException : Exception
-    {
-        public string VMRunResults { get; }
-
-        public VMRunFailedToRunException(string message, string vmrunresult) : base($"{message} VMRun: {vmrunresult}")
-        {
-            
-            VMRunResults = vmrunresult;
-        }
-    }
-
     public class VDiskManException : Exception
     {
         public string Results { get;  }

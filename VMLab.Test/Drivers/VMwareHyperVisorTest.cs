@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Channels;
 using System.Security;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -17,19 +18,23 @@ namespace VMLab.Test.Drivers
     {
         public IVMwareHypervisor Hypervisor;
         public Mock<IFileSystem> FileSystem;
-        public Mock<IVMRun> VMrun;
         public Mock<IVMwareExe> VMwareExe;
         public Mock<IVMwareDiskExe> VMwareDiskExe;
+        public Mock<IServiceDiscovery> SVC;
+        public Mock<IVix> Vix;
 
         [TestInitialize()]
         public void Setup()
         {
-            VMrun = new Mock<IVMRun>();
             FileSystem = new Mock<IFileSystem>();
             VMwareExe = new Mock<IVMwareExe>();
             VMwareDiskExe = new Mock<IVMwareDiskExe>();
-            Hypervisor = new VMwareHypervisor(VMrun.Object, FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object);
-
+            Vix = new Mock<IVix>();
+            SVC = new Mock<IServiceDiscovery>();
+            Hypervisor = new VMwareHypervisor(FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object);
+            
+            ServiceDiscovery.UnitTestInject(SVC.Object);
+            SVC.Setup(s => s.GetObject<IVix>()).Returns(Vix.Object);
 
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.ReadFile("c:\\existing.vmx"))
@@ -46,42 +51,18 @@ namespace VMLab.Test.Drivers
         public void CanCreateLinkedCloneByCallingVMRun()
         {
             FileSystem.Setup(f => f.FileExists("Path\\ToExisting\\VM.vmx")).Returns(true);
-            VMrun.Setup(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" linked -snapshot=\"Snapshot\""))
-                .Returns("Cloned ok");
+
             Hypervisor.Clone("Path\\ToExisting\\VM.vmx", "Path\\ToNewLocation\\vm.vmx", "Snapshot", CloneType.Linked);
-            VMrun.Verify(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" linked -snapshot=\"Snapshot\""));
+
+            Vix.Verify(v => v.Clone("Path\\ToNewLocation\\vm.vmx", "Snapshot", true));
         }
 
         [TestMethod]
         [ExpectedException(typeof (VMXDoesntExistException))]
         public void CallingCloneOnVMThatDoesntExistWillThrow()
         {
-            VMrun.Setup(
-                m =>
-                    m.Execute(
-                        "clone \"c:\\vmthatdoesntexists.vmx\" \"c:\\Path\\ToNewLocation\\vm.vmx\" linked -snapshot=\"Snapshot\""))
-                .Returns("Error: Cannot open VM: c:\\vmthatdoesntexists.vmx, The virtual machine cannot be found");
+            FileSystem.Setup(f => f.FileExists("c:\\vmthatdoesntexists.vmx")).Returns(false);
             Hypervisor.Clone("c:\\vmthatdoesntexists.vmx", "Path\\ToNewLocation\\vm.vmx", "Snapshot", CloneType.Linked);
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (SnapshotDoesntExistException))]
-        public void CallingCloneOnVMWithSnapshotThatDoesntExistsWillThrow()
-        {
-            FileSystem.Setup(f => f.FileExists("Path\\ToExisting\\VM.vmx")).Returns(true);
-            VMrun.Setup(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" linked -snapshot=\"NonExistingSnapshot\""))
-                .Returns("Error: Invalid snapshot name 'NonExistingSnapshot'");
-            Hypervisor.Clone("Path\\ToExisting\\VM.vmx", "Path\\ToNewLocation\\vm.vmx", "NonExistingSnapshot",
-                CloneType.Linked);
         }
 
         [TestMethod]
@@ -90,29 +71,17 @@ namespace VMLab.Test.Drivers
         {
             FileSystem.Setup(f => f.FileExists("Path\\ToExisting\\VM.vmx")).Returns(true);
             FileSystem.Setup(f => f.FileExists("Path\\ToNewLocation\\vm.vmx")).Returns(true);
-            VMrun.Setup(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" linked -snapshot=\"NonExistingSnapshot\""))
-                .Returns("Error: Invalid snapshot name 'NonExistingSnapshot'");
             Hypervisor.Clone("Path\\ToExisting\\VM.vmx", "Path\\ToNewLocation\\vm.vmx", "NonExistingSnapshot",
                 CloneType.Linked);
         }
 
         [TestMethod]
-        public void CAllingCloneWithFullFlagWillCallVMRunWithExpectedSwitch()
+        public void CallingCloneWithFullFlagWillCallVMRunWithExpectedSwitch()
         {
             FileSystem.Setup(f => f.FileExists("Path\\ToExisting\\VM.vmx")).Returns(true);
-            VMrun.Setup(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" full -snapshot=\"Snapshot\""))
-                .Returns("Cloned ok");
+
             Hypervisor.Clone("Path\\ToExisting\\VM.vmx", "Path\\ToNewLocation\\vm.vmx", "Snapshot", CloneType.Full);
-            VMrun.Verify(
-                m =>
-                    m.Execute(
-                        "clone \"Path\\ToExisting\\VM.vmx\" \"Path\\ToNewLocation\\vm.vmx\" full -snapshot=\"Snapshot\""));
+            Vix.Verify(v => v.Clone("Path\\ToNewLocation\\vm.vmx", "Snapshot", false));
         }
 
         [TestMethod]
@@ -206,30 +175,25 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingGetRunningVMsWhenNoVMsAreRunningWillReturnAnEmptyArray()
         {
-            VMrun.Setup(v => v.Execute("list")).Returns("Total running VMs: 0");
+            Vix.Setup(v => v.GetRunningVMs()).Returns(new string[] {});
             Assert.IsTrue(Hypervisor.GetRunningVMs().Length == 0);
         }
 
         [TestMethod]
         public void CallingGetRunningVMsWillReturnAvmNameWhenOneIsRunning()
         {
-            VMrun.Setup(v => v.Execute("list"))
-                .Returns(string.Join(Environment.NewLine, "Total running VMs: 1", "c:\\myvm\\myvm.vmx"));
+            Vix.Setup(v => v.GetRunningVMs()).Returns(new[] {"c:\\myvm\\myvm.vmx"});
             Assert.IsTrue(Hypervisor.GetRunningVMs().Contains("c:\\myvm\\myvm.vmx"));
         }
 
         [TestMethod]
         public void CallingFileExistInGuestReturnTrueIfFileExists()
         {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("The file exists.");
+            Vix.Setup(v => v.FileExistInGuest("c:\\windows\\explorer.exe")).Returns(true);
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Assert.IsTrue(Hypervisor.FileExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object},
                 "c:\\windows\\explorer.exe"));
         }
@@ -237,15 +201,11 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingFileExistInGuestReturnFalseIfFileDoesntExist()
         {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("The file does not exist.");
+            Vix.Setup(v => v.FileExistInGuest("c:\\windows\\explorer.exe")).Returns(false);
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Assert.IsFalse(Hypervisor.FileExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object},
                 "c:\\windows\\explorer.exe"));
         }
@@ -253,75 +213,25 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingFileExistsWithBadFirstCredentialButGoodSecondCredentialsReturnsTrueIfFileExists()
         {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("The file exists.");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
+            Vix.Setup(v => v.FileExistInGuest("c:\\windows\\explorer.exe")).Returns(true);
+            Vix.Setup(v => v.LoginToGuest("baduser", "badpassword", false)).Throws(new VixException(""));
             var goodcreds = new Mock<IVMCredential>();
             goodcreds.Setup(c => c.Username).Returns("user");
             goodcreds.Setup(c => c.Password).Returns("password");
             var badcreds = new Mock<IVMCredential>();
             badcreds.Setup(c => c.Username).Returns("baduser");
             badcreds.Setup(c => c.Password).Returns("badpassword");
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Assert.IsTrue(Hypervisor.FileExistInGuest("c:\\myvm\\myvm.vmx", new[] {badcreds.Object, goodcreds.Object},
                 "c:\\windows\\explorer.exe"));
         }
 
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingFileExistsWithAllBadPasswordsThrowsAnException()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("user");
-            badcreds.Setup(c => c.Password).Returns("password");
-            var anotherbadcreds = new Mock<IVMCredential>();
-            anotherbadcreds.Setup(c => c.Username).Returns("baduser");
-            anotherbadcreds.Setup(c => c.Password).Returns("badpassword");
-            Hypervisor.FileExistInGuest("c:\\myvm\\myvm.vmx", new[] {anotherbadcreds.Object, badcreds.Object},
-                "c:\\windows\\explorer.exe");
-        }
 
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingFileExistsWithAnotherTypeOfErrorReturnsApplicationException()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("Error: Something else.");
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            Hypervisor.FileExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object}, "c:\\windows\\explorer.exe");
-        }
-
-        [TestMethod]
+       [TestMethod]
         [ExpectedException(typeof (GuestVMPoweredOffException))]
-        public void CallingFileExistsWhenVMIsPoweredOffWillThrowA()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password fileExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\\explorer.exe\""))
-                .Returns("Error: The virtual machine is not powered on: \"c:\\myvm\\myvm.vmx\"");
+        public void CallingFileExistsWhenVMIsPoweredOffWillThrow()
+       {
+           Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Off);
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
@@ -330,113 +240,26 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingDirectoryExistInGuestReturnTrueIfFileExists()
+        public void CallingDirectoryExistInGuestReturnTrueIfDirectoryExists()
         {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("The directory exists.");
+            Vix.Setup(v => v.DirectoryExistInGuest("c:\\windows")).Returns(true);
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Assert.IsTrue(Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object}, "c:\\windows"));
         }
 
         [TestMethod]
-        public void CallingDirectoryExistInGuestReturnFalseIfFileDoesntExist()
+        public void CallingDirectoryExistInGuestReturnFalseIfDirectoryDoesntExist()
         {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\folderthatdoesntexist\""))
-                .Returns("The directory does not exist.");
+            Vix.Setup(v => v.DirectoryExistInGuest("c:\\folderthatdoesntexist")).Returns(false);
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Assert.IsFalse(Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object},
                 "c:\\folderthatdoesntexist"));
-        }
-
-        [TestMethod]
-        public void CallingDirectoryExistsWithBadFirstCredentialButGoodSecondCredentialsReturnsTrueIfFileExists()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("The directory exists.");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
-            var goodcreds = new Mock<IVMCredential>();
-            goodcreds.Setup(c => c.Username).Returns("user");
-            goodcreds.Setup(c => c.Password).Returns("password");
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-            Assert.IsTrue(Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx",
-                new[] {badcreds.Object, goodcreds.Object}, "c:\\windows"));
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingDirectoryExistsWithAllBadPasswordsThrowsAnException()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("Error: Invalid user name or password for the guest OS.");
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("user");
-            badcreds.Setup(c => c.Password).Returns("password");
-            var anotherbadcreds = new Mock<IVMCredential>();
-            anotherbadcreds.Setup(c => c.Username).Returns("baduser");
-            anotherbadcreds.Setup(c => c.Password).Returns("badpassword");
-            Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx", new[] {anotherbadcreds.Object, badcreds.Object},
-                "c:\\windows");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingDirectoryExistsWithAnotherTypeOfErrorReturnsApplicationException()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("Error: Something else.");
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object}, "c:\\windows");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (GuestVMPoweredOffException))]
-        public void CallingDirectoryExistsWhenVMIsPoweredOffWillThrowA()
-        {
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password directoryExistsInGuest \"c:\\myvm\\myvm.vmx\" \"c:\\windows\""))
-                .Returns("Error: The virtual machine is not powered on: \"c:\\myvm\\myvm.vmx\"");
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            Hypervisor.DirectoryExistInGuest("c:\\myvm\\myvm.vmx", new[] {creds.Object}, "c:\\windows");
         }
 
         [TestMethod]
@@ -449,20 +272,20 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingStartVMForExistingVMWillResultInStartedVmbyVMRun()
+        public void CallingStartVMForExistingVMWillResultInStartedVmByVix()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("start \"c:\\existingvm.vmx\" nogui")).Returns(string.Empty);
             Hypervisor.StartVM("c:\\existingvm.vmx");
-            VMrun.Verify(v => v.Execute("start \"c:\\existingvm.vmx\" nogui"));
+            Vix.Verify(v => v.ConnectToVM("c:\\existingvm.vmx"));
+            Vix.Verify(v => v.PowerOnVM());
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingStartVMForExistingVMWillThrowIfThereIsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("start \"c:\\existingvm.vmx\" nogui")).Returns("Error: Some error.");
+            Vix.Setup(v => v.PowerOnVM()).Throws(new VixException(""));
             Hypervisor.StartVM("c:\\existingvm.vmx");
         }
 
@@ -479,27 +302,26 @@ namespace VMLab.Test.Drivers
         public void CallingStopVMForExistingVMWillResultInStopCalledByVMRun()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("stop \"c:\\existingvm.vmx\" soft")).Returns(string.Empty);
             Hypervisor.StopVM("c:\\existingvm.vmx", false);
-            VMrun.Verify(v => v.Execute("stop \"c:\\existingvm.vmx\" soft"));
+            Vix.Verify(v => v.ConnectToVM("c:\\existingvm.vmx"));
+            Vix.Verify(v => v.PowerOffVM(false));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingStopVMForExistingVMWillThrowIfThereIsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("stop \"c:\\existingvm.vmx\" soft")).Returns("Error: Some error.");
+            Vix.Setup(v => v.PowerOffVM(false)).Throws(new VixException(""));
             Hypervisor.StopVM("c:\\existingvm.vmx", false);
         }
 
         [TestMethod]
-        public void CallingStopVMWithForceWillRunExpectedCommandLineWithVMRun()
+        public void CallingStopVMWithForceWillCallVixWithForceParameter()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("stop \"c:\\existingvm.vmx\" hard")).Returns(string.Empty);
             Hypervisor.StopVM("c:\\existingvm.vmx", true);
-            VMrun.Verify(v => v.Execute("stop \"c:\\existingvm.vmx\" hard"));
+            Vix.Verify(v => v.PowerOffVM(true));
         }
 
         [TestMethod]
@@ -515,27 +337,25 @@ namespace VMLab.Test.Drivers
         public void CallingResetVMForExistingVMWillResultInStopCalledByVMRun()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("reset \"c:\\existingvm.vmx\" soft")).Returns(string.Empty);
             Hypervisor.ResetVM("c:\\existingvm.vmx", false);
-            VMrun.Verify(v => v.Execute("reset \"c:\\existingvm.vmx\" soft"));
+            Vix.Verify(v => v.ResetVM(false));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingResetVMForExistingVMWillThrowIfThereIsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("reset \"c:\\existingvm.vmx\" soft")).Returns("Error: Some error.");
+            Vix.Setup(v => v.ResetVM(false)).Throws(new VixException(""));
             Hypervisor.ResetVM("c:\\existingvm.vmx", false);
         }
 
         [TestMethod]
-        public void CallingResetVMWithForceWillRunExpectedCommandLineWithVMRun()
+        public void CallingResetVMWithForceWillCallVixWithForceParameter()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("reset \"c:\\existingvm.vmx\" hard")).Returns(string.Empty);
             Hypervisor.ResetVM("c:\\existingvm.vmx", true);
-            VMrun.Verify(v => v.Execute("reset \"c:\\existingvm.vmx\" hard"));
+            Vix.Verify(v => v.ResetVM(true));
         }
 
         [TestMethod]
@@ -597,28 +417,20 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingRemoveVMOnNonExistingVMWillNotCallVMRun()
-        {
-            FileSystem.Setup(f => f.FileExists("c:\\vmfolder\\vmguid\\nonexisting.vmx")).Returns(false);
-            Hypervisor.RemoveVM("c:\\vmfolder\\vmguid\\nonexisting.vmx");
-            VMrun.Verify(v => v.Execute("deleteVM \"c:\\vmfolder\\vmguid\\nonexisting.vmx\""), Times.Never);
-        }
-
-        [TestMethod]
         public void CallingRemoveVMWillMakeCallToVMRunToRemoveVM()
         {
             FileSystem.Setup(f => f.FileExists("c:\\vmfolder\\vmguid\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("deleteVM \"c:\\vmfolder\\vmguid\\existing.vmx\"")).Returns(string.Empty);
             Hypervisor.RemoveVM("c:\\vmfolder\\vmguid\\existing.vmx");
-            VMrun.Verify(v => v.Execute("deleteVM \"c:\\vmfolder\\vmguid\\existing.vmx\""));
+            Vix.Verify(v => v.ConnectToVM("c:\\vmfolder\\vmguid\\existing.vmx"));
+            Vix.Verify(v => v.Delete());
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingRemoveVMWillThrowIfVMRunReturnsAnError()
+        [ExpectedException(typeof (VixException))]
+        public void CallingRemoveVMWillThrowIfVixThrowsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\vmfolder\\vmguid\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("deleteVM \"c:\\vmfolder\\vmguid\\existing.vmx\"")).Returns("Error: Some error");
+            Vix.Setup(v => v.Delete()).Throws(new VixException(""));
             Hypervisor.RemoveVM("c:\\vmfolder\\vmguid\\existing.vmx");
         }
 
@@ -627,7 +439,6 @@ namespace VMLab.Test.Drivers
         {
             FileSystem.Setup(f => f.FileExists("c:\\vmfolder\\vmguid\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\vmfolder")).Returns(true);
-            VMrun.Setup(v => v.Execute("deleteVM \"c:\\vmfolder\\vmguid\\existing.vmx\"")).Returns(string.Empty);
             Hypervisor.RemoveVM("c:\\vmfolder\\vmguid\\existing.vmx");
             FileSystem.Verify(f => f.DeleteFolder("c:\\vmfolder", true));
         }
@@ -693,17 +504,15 @@ namespace VMLab.Test.Drivers
 
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FileExists("c:\\existinghostfile.txt")).Returns(true);
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Hypervisor.CopyFileToGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\existinghostfile.txt",
                 "c:\\onvm\\somefile.txt");
-
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu user -gp password CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\onvm\\somefile.txt\""));
+            Vix.Verify(v => v.CopyFileToGuest("c:\\existinghostfile.txt", "c:\\onvm\\somefile.txt"));
+           
         }
 
         [TestMethod]
-        [ExpectedException(typeof (FileDoesntExistInGuest))]
+        [ExpectedException(typeof (VixException))]
         public void CallingCopyFileWithABadGuestPathWillThrow()
         {
             var creds = new Mock<IVMCredential>();
@@ -712,88 +521,12 @@ namespace VMLab.Test.Drivers
 
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FileExists("c:\\existinghostfile.txt")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu user -gp password CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""))
-                .Returns("Error: A file was not found");
+            Vix.Setup(v => v.CopyFileToGuest("c:\\existinghostfile.txt", "c:\\badvm\\somefile.txt")).Throws(new VixException(""));
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Hypervisor.CopyFileToGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\existinghostfile.txt",
                 "c:\\badvm\\somefile.txt");
         }
 
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingCopyFileWillThrowIfAnUnknownErrorOccors()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existinghostfile.txt")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu user -gp password CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""))
-                .Returns("Error: something else!");
-            Hypervisor.CopyFileToGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\existinghostfile.txt",
-                "c:\\badvm\\somefile.txt");
-        }
-
-        [TestMethod]
-        public void CallingCopyFileWillBeSuccsefulIfThereIsOneGoodSetOfCredentialsInArray()
-        {
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-            var goodcreds = new Mock<IVMCredential>();
-            goodcreds.Setup(c => c.Username).Returns("gooduser");
-            goodcreds.Setup(c => c.Password).Returns("goodpassword");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existinghostfile.txt")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu baduser -gp badpassword CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu gooduser -gp goodpassword CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""));
-
-            Hypervisor.CopyFileToGuest("c:\\existing.vmx", new[] {badcreds.Object, goodcreds.Object},
-                "c:\\existinghostfile.txt", "c:\\badvm\\somefile.txt");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingCopyFileWithArrayFullOfBadPasswordsWillThrow()
-        {
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-            var anotherbadcreds = new Mock<IVMCredential>();
-            anotherbadcreds.Setup(c => c.Username).Returns("anotherbaduser");
-            anotherbadcreds.Setup(c => c.Password).Returns("anotherbadpassword");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existinghostfile.txt")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu baduser -gp badpassword CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        $"-T ws -gu anotherbaduser -gp anotherbadpassword CopyFileFromHostToGuest \"c:\\existing.vmx\" \"c:\\existinghostfile.txt\" \"c:\\badvm\\somefile.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            ;
-
-            Hypervisor.CopyFileToGuest("c:\\existing.vmx", new[] {badcreds.Object, anotherbadcreds.Object},
-                "c:\\existinghostfile.txt", "c:\\badvm\\somefile.txt");
-        }
 
         [TestMethod]
         [ExpectedException(typeof (VMXDoesntExistException))]
@@ -809,42 +542,17 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingCopyFileFromGuestWillMakeCallToVMRunToCopyFile()
+        public void CallingCopyFileFromGuestWillMakeCallToVix()
         {
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\onvm\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns(string.Empty);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\")).Returns(true);
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Hypervisor.CopyFileFromGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\onvm\\somefile.txt",
                 "c:\\somefile.txt");
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\onvm\\somefile.txt\" \"c:\\somefile.txt\""));
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (FileDoesntExistInGuest))]
-        public void CallingCopyFileFromGuestWillThrowIfFileDoesntExistInGuest()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\badpath\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns("Error: A file was not found");
-            FileSystem.Setup(f => f.FolderExists("c:\\")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            Hypervisor.CopyFileFromGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\badpath\\somefile.txt",
-                "c:\\somefile.txt");
+            Vix.Verify(v => v.CopyFileFromGuest("c:\\somefile.txt", "c:\\onvm\\somefile.txt"));
         }
 
         [TestMethod]
@@ -861,69 +569,6 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingCopyFromGuestWillThrowIfErrorIsReturned()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-            FileSystem.Setup(f => f.FolderExists("c:\\")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns("Error: Some other unknown error");
-            Hypervisor.CopyFileFromGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\somefile.txt",
-                "c:\\somefile.txt");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingCopyFromGuestWithBadCredentialsWillThrow()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("badpassword");
-            FileSystem.Setup(f => f.FolderExists("c:\\")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp badpassword CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            Hypervisor.CopyFileFromGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\somefile.txt",
-                "c:\\somefile.txt");
-        }
-
-        [TestMethod]
-        public void CallingCopyFromGuestWithAnArrayOfCredentialsSomeGoodSomeBadWillSucceed()
-        {
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-            var goodcreds = new Mock<IVMCredential>();
-            goodcreds.Setup(c => c.Username).Returns("gooduser");
-            goodcreds.Setup(c => c.Password).Returns("goodpassword");
-
-            FileSystem.Setup(f => f.FolderExists("c:\\")).Returns(true);
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu gooduser -gp goodpassword CopyFileFromGuestToHost \"c:\\existing.vmx\" \"c:\\somefile.txt\" \"c:\\somefile.txt\""))
-                .Returns(string.Empty);
-
-            Hypervisor.CopyFileFromGuest("c:\\existing.vmx", new[] {badcreds.Object, goodcreds.Object},
-                "c:\\somefile.txt", "c:\\somefile.txt");
-        }
-
-        [TestMethod]
         [ExpectedException(typeof (VMXDoesntExistException))]
         public void CallingDeleteFileOnVMThatDoesntExistThrows()
         {
@@ -936,95 +581,28 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingDeleteFileOnVMWillMakeACalltoVMRun()
+        public void CallingDeleteFileOnVMWillMakeACallVix()
         {
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.DeleteFileInGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\testfileinguest.txt");
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password deleteFileInGuest \"c:\\existing.vmx\" \"c:\\testfileinguest.txt\""));
+            Vix.Verify(v => v.DeleteFileInGuest("c:\\testfileinguest.txt"));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (FileDoesntExistInGuest))]
+        [ExpectedException(typeof (VixException))]
         public void CallingDeleteFileWillThrowIfFileDoesntExistInGuest()
         {
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password deleteFileInGuest \"c:\\existing.vmx\" \"c:\\badfilepath.txt\""))
-                .Returns("Error: A file was not found");
+            Vix.Setup(v => v.DeleteFileInGuest("c:\\badfilepath.txt")).Throws(new VixException(""));
             Hypervisor.DeleteFileInGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\badfilepath.txt");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingDeleteFileWillThrowIfUnknownErrorIsReturned()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password deleteFileInGuest \"c:\\existing.vmx\" \"c:\\guestfilepath.txt\""))
-                .Returns("Error: Some unknown error was returned.");
-            Hypervisor.DeleteFileInGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\guestfilepath.txt");
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingDeleteFileWillThrowIfCredentialsAreIncorrect()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("baduser");
-            creds.Setup(c => c.Password).Returns("badpassword");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword deleteFileInGuest \"c:\\existing.vmx\" \"c:\\guestfilepath.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            Hypervisor.DeleteFileInGuest("c:\\existing.vmx", new[] {creds.Object}, "c:\\guestfilepath.txt");
-        }
-
-        [TestMethod]
-        public void CallingDeleteFileWillNotThrowWithMixOfGoodAndBadCredentials()
-        {
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-
-            var goodcreds = new Mock<IVMCredential>();
-            goodcreds.Setup(c => c.Username).Returns("gooduser");
-            goodcreds.Setup(c => c.Password).Returns("goodpassword");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword deleteFileInGuest \"c:\\existing.vmx\" \"c:\\guestfilepath.txt\""))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu gooduser -gp goodpassword deleteFileInGuest \"c:\\existing.vmx\" \"c:\\guestfilepath.txt\""))
-                .Returns(string.Empty);
-            Hypervisor.DeleteFileInGuest("c:\\existing.vmx", new[] {badcreds.Object, goodcreds.Object},
-                "c:\\guestfilepath.txt");
         }
 
         [TestMethod]
@@ -1046,167 +624,39 @@ namespace VMLab.Test.Drivers
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Guest program exited with non-zero exit code: 1");
             Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", false,
                 false);
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"));
+            Vix.Verify(v => v.ExecuteCommand("c:\\myapp.exe", "-someswitches", false, true));
         }
 
         [TestMethod]
-        public void CallingExecuteCommandWillRetry5TimesIfUnknownErrorIsReturned()
+        public void CallingExecuteCommandWithNoWaitSetWillPassNoWaitToVix()
         {
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns($"Error: Unknown error{Environment.NewLine}");
-
-            try
-            {
-                Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches",
-                    false, false);
-            }
-            catch (VMRunFailedToRunException)
-            {
-                //Ignore exception: We are only interested in how many times it retried.
-            }
-
-            VMrun.Verify(v => v.Execute("-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"), Times.Exactly(5));
-
-        }
-
-        [TestMethod]
-        public void CallingExecuteCommandWithNoWaitSetWillPassNoWaitToVMRun()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" -nowait \"c:\\myapp.exe\" -someswitches"))
-                .Returns(string.Empty);
             Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", true,
                 false);
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" -nowait \"c:\\myapp.exe\" -someswitches"));
+            Vix.Verify(v => v.ExecuteCommand("c:\\myapp.exe", "-someswitches", false, false));
         }
 
         [TestMethod]
-        public void CallingExecuteCommandWithInteractiveSwitchWillPassSwitchToVMRun()
+        public void CallingExecuteCommandWithInteractiveSwitchWillMakeVixDoInteractiveLogon()
         {
             var creds = new Mock<IVMCredential>();
             creds.Setup(c => c.Username).Returns("user");
             creds.Setup(c => c.Password).Returns("password");
-
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" -interactive \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Guest program exited with non-zero exit code: 1");
             Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", false,
                 true);
-            VMrun.Verify(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" -interactive \"c:\\myapp.exe\" -someswitches"));
+            Vix.Verify(v => v.LoginToGuest("user", "password", true));
         }
-
-        [TestMethod]
-        [ExpectedException(typeof (FileDoesntExistInGuest))]
-        public void CallingExecuteCommandWillThrowIfProgramCantBeFoundInGuest()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Error: A file was not found");
-            Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", false,
-                false);
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingExecuteCommandWillThrowIfUnknownErrorIsReturned()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Error: Some other unknonw error");
-            Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", false,
-                false);
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (BadGuestCredentialsException))]
-        public void CallingExecuteCommandWillThrowIfBadGuestCredentialsArePassed()
-        {
-            var creds = new Mock<IVMCredential>();
-            creds.Setup(c => c.Username).Returns("user");
-            creds.Setup(c => c.Password).Returns("password");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu user -gp password runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {creds.Object}, "c:\\myapp.exe", "-someswitches", false,
-                false);
-        }
-
-        [TestMethod]
-        public void CallingExecuteCommandWithSomeBadAndGoodCredentialsWillSuccessed()
-        {
-            var badcreds = new Mock<IVMCredential>();
-            badcreds.Setup(c => c.Username).Returns("baduser");
-            badcreds.Setup(c => c.Password).Returns("badpassword");
-            var goodcreds = new Mock<IVMCredential>();
-            goodcreds.Setup(c => c.Username).Returns("gooduser");
-            goodcreds.Setup(c => c.Password).Returns("goodpassword");
-
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu baduser -gp badpassword runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Error: Invalid user name or password for the guest OS");
-            VMrun.Setup(
-                v =>
-                    v.Execute(
-                        "-T ws -gu gooduser -gp goodpassword runProgramInGuest \"c:\\existing.vmx\" \"c:\\myapp.exe\" -someswitches"))
-                .Returns("Guest program exited with non-zero exit code: 1");
-            Hypervisor.ExecuteCommand("c:\\existing.vmx", new[] {badcreds.Object, goodcreds.Object}, "c:\\myapp.exe",
-                "-someswitches", false, false);
-        }
-
+        
         [TestMethod]
         [ExpectedException(typeof (VMXDoesntExistException))]
         public void CallingAddSharedFolderWithVMXThatDoesntExistWillThrow()
@@ -1225,12 +675,12 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingAddSharedFolderWillMakeACallToVMRunToAddShare()
+        public void CallingAddSharedFolderWillMakeACallToVixToAddShare()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
-            VMrun.Verify(v => v.Execute("addSharedFolder \"c:\\existing.vmx\" \"myfolder\" c:\\myfolder"));
+            Vix.Verify(v => v.AddShareFolder("c:\\myfolder", "myfolder"));
         }
 
         [TestMethod]
@@ -1239,28 +689,26 @@ namespace VMLab.Test.Drivers
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
-            VMrun.Verify(v => v.Execute("enableSharedFolders \"c:\\existing.vmx\""));
+            Vix.Verify(v => v.EnableSharedFolders());
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingAddSharedFolderWillThrowIfEnableSharingReturnsAnError()
         {
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("enableSharedFolders \"c:\\existing.vmx\""))
-                .Returns("Error: Some unknown error!");
+            Vix.Setup(v => v.EnableSharedFolders()).Throws(new VixException(""));
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingAddSharedFolderWillThrowIfaddingShareReturnsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
-            VMrun.Setup(v => v.Execute("addSharedFolder \"c:\\existing.vmx\" \"myfolder\" c:\\myfolder"))
-                .Returns("Error: Some unknown error!");
+            Vix.Setup(v => v.AddShareFolder("c:\\myfolder", "myfolder")).Throws(new VixException(""));
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
         }
 
@@ -1273,20 +721,19 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingRemoveSharedFolderWillMakeCalltoVMRun()
+        public void CallingRemoveSharedFolderWillMakeCalltoVix()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.RemoveSharedFolder("c:\\existing.vmx", "myshare");
-            VMrun.Verify(v => v.Execute("removeSharedFolder \"c:\\existing.vmx\" \"myshare\""));
+            Vix.Verify(v => v.RemoveSharedFolder("myshare"));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingRemoveSharedFolderWillThrowIfVMRunReturnsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("removeSharedFolder \"c:\\existing.vmx\" \"myshare\""))
-                .Returns("Error: Some error");
+            Vix.Setup(v => v.RemoveSharedFolder("myshare")).Throws(new VixException(""));
             Hypervisor.RemoveSharedFolder("c:\\existing.vmx", "myshare");
         }
 
@@ -1299,21 +746,11 @@ namespace VMLab.Test.Drivers
         }
 
         [TestMethod]
-        public void CallingCreateSnapshotWillCallVMRun()
+        public void CallingCreateSnapshotWillCallVix()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.CreateSnapshot("c:\\existing.vmx", "mysnapshot");
-            VMrun.Verify(v => v.Execute("snapshot \"c:\\existing.vmx\" \"mysnapshot\""));
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingCreateSnapshotWillThrowIfVMRunReturnsError()
-        {
-            FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("snapshot \"c:\\existing.vmx\" \"mysnapshot\""))
-                .Returns("Error: Some unknown error");
-            Hypervisor.CreateSnapshot("c:\\existing.vmx", "mysnapshot");
+            Vix.Verify(v => v.CreateSnapshot("mysnapshot", It.IsAny<string>(), It.IsAny<bool>()));
         }
 
         [TestMethod]
@@ -1329,16 +766,15 @@ namespace VMLab.Test.Drivers
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.RemoveSnapshot("c:\\existing.vmx", "mysnapshot");
-            VMrun.Verify(v => v.Execute("deleteSnapshot \"c:\\existing.vmx\" \"mysnapshot\""));
+            Vix.Verify(v => v.RemoveSnapshot("mysnapshot"));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingRemoveSnapshotWillThrowIfVMRunReturnsError()
+        [ExpectedException(typeof (VixException))]
+        public void CallingRemoveSnapshotWillThrowIfVixReturnsError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("deleteSnapshot \"c:\\existing.vmx\" \"mysnapshot\""))
-                .Returns("Error: Some unknown error");
+            Vix.Setup(v => v.RemoveSnapshot("mysnapshot")).Throws(new VixException(""));
             Hypervisor.RemoveSnapshot("c:\\existing.vmx", "mysnapshot");
         }
 
@@ -1357,16 +793,15 @@ namespace VMLab.Test.Drivers
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.RevertToSnapshot("c:\\existing.vmx", "mysnapshot");
-            VMrun.Verify(v => v.Execute("revertToSnapshot \"c:\\existing.vmx\" \"mysnapshot\""));
+            Vix.Verify(v => v.RevertToSnapshot("mysnapshot"));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
-        public void CallingRevertToSnapshotWillThrowIfVMRunReturnsError()
+        [ExpectedException(typeof (VixException))]
+        public void CallingRevertToSnapshotWillThrowIfVixReturnsError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("revertToSnapshot \"c:\\existing.vmx\" \"mysnapshot\""))
-                .Returns("Error: Some unknown error");
+            Vix.Setup(v => v.RevertToSnapshot("mysnapshot")).Throws(new VixException(""));
             Hypervisor.RevertToSnapshot("c:\\existing.vmx", "mysnapshot");
         }
 
@@ -1383,28 +818,26 @@ namespace VMLab.Test.Drivers
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.GetSnapshots("c:\\existing.vmx");
-            VMrun.Verify(v => v.Execute("listSnapshots \"c:\\existing.vmx\""));
+            Vix.Verify(v => v.GetSnapshots());
         }
 
         [TestMethod]
         public void CallingGetSnapshotsWillReturnAnArrayOfSnapshots()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("listSnapshots \"c:\\existing.vmx\""))
-                .Returns(string.Join(Environment.NewLine, "Total snapshots: 2", "Base", "Template"));
+            Vix.Setup(v => v.GetSnapshots()).Returns(new[] {"Base", "Template"});
             var snapshots = Hypervisor.GetSnapshots("c:\\existing.vmx");
 
             Assert.IsTrue(snapshots.Contains("Base"));
             Assert.IsTrue(snapshots.Contains("Template"));
-            Assert.IsFalse(snapshots.Contains("Total snapshots: 2"));
         }
 
         [TestMethod]
-        [ExpectedException(typeof (VMRunFailedToRunException))]
+        [ExpectedException(typeof (VixException))]
         public void CallingGetSnapshotWillThrowIfVMRunReturnsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
-            VMrun.Setup(v => v.Execute("listSnapshots \"c:\\existing.vmx\"")).Returns("Error: Unknown error!");
+            Vix.Setup(v => v.GetSnapshots()).Throws(new VixException(""));
             Hypervisor.GetSnapshots("c:\\existing.vmx");
         }
 

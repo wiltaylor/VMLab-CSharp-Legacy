@@ -80,6 +80,7 @@
     <Compile Include="Cmdlet\ClearLabFloppy.cs" />
     <Compile Include="Cmdlet\ClearLabNetwork.cs" />
     <Compile Include="Cmdlet\ClearLabVMSetting.cs" />
+    <Compile Include="Cmdlet\GetDebugInfo.cs" />
     <Compile Include="Cmdlet\GetLabEnvironmentData.cs" />
     <Compile Include="Cmdlet\GetLabPackageRepositories.cs" />
     <Compile Include="Cmdlet\GetLabPackages.cs" />

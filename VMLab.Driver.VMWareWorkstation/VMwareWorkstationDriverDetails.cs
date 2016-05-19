@@ -27,7 +27,6 @@ namespace VMLab.Driver.VMWareWorkstation
             container.RegisterType<IDriver, VMwareDriver>();
             container.RegisterType<IVMwareHypervisor, VMwareHypervisor>();
             container.RegisterType<ICaps, VMwareCaps>();
-            container.RegisterType<IVMRun, VMRun>();
             container.RegisterType<IVMwareDiskExe, VMwareDiskExe>();
             container.RegisterType<IVMwareExe, VMwareExe>();
             container.RegisterType<IVix, Vix>();
