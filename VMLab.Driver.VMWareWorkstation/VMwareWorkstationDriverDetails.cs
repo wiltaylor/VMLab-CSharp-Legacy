@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
-using Microsoft.Practices.Unity;
 using Microsoft.Win32;
 using VMLab.Drivers;
 using VMLab.Helper;
@@ -22,14 +21,14 @@ namespace VMLab.Driver.VMWareWorkstation
             return vmfolder != "<Not Installed>";
         }
 
-        public void OnSelect(IUnityContainer container)
+        public void OnSelect(IocContainer container)
         {
-            container.RegisterType<IDriver, VMwareDriver>();
-            container.RegisterType<IVMwareHypervisor, VMwareHypervisor>();
-            container.RegisterType<ICaps, VMwareCaps>();
-            container.RegisterType<IVMwareDiskExe, VMwareDiskExe>();
-            container.RegisterType<IVMwareExe, VMwareExe>();
-            container.RegisterType<IVix, Vix>();
+            container.Register<IDriver, VMwareDriver>(Name);
+            container.Register<IVMwareHypervisor, VMwareHypervisor>(Name);
+            container.Register<ICaps, VMwareCaps>(Name);
+            container.Register<IVMwareDiskExe, VMwareDiskExe>(Name);
+            container.Register<IVMwareExe, VMwareExe>(Name);
+            container.Register<IVix, Vix>(Name);
 
             try
             {

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Microsoft.Practices.Unity;
 using VMLab.Drivers;
 using VMLab.Model;
 using VMLab.Test.Model;
@@ -14,7 +13,9 @@ namespace VMLab.Helper
     public class ServiceDiscovery : IServiceDiscovery
     {
         private static IServiceDiscovery _instance;
-        private readonly IUnityContainer _container;
+        private readonly IocContainer _container;
+
+        public string CurrentDriver { get; set; }
         
         public static void UnitTestInject(IServiceDiscovery instance)
         {
@@ -28,12 +29,12 @@ namespace VMLab.Helper
 
         public T GetObject<T>()
         {
-            return _container.Resolve<T>();
+            return _container.GetObject<T>(CurrentDriver);
         }
 
         public IEnumerable<T> GetAllObject<T>()
         {
-            return _container.ResolveAll<T>();
+            return _container.GetObjects<T>(CurrentDriver);
         }
 
         public void SelectDriver(string name)
@@ -74,8 +75,10 @@ namespace VMLab.Helper
 
         private ServiceDiscovery()
         {
-            _container = new UnityContainer();
+            _container = new IocContainer();
             TypeRegistaration();
+
+            CurrentDriver = "VMwareWorkstation"; //Hack: Till plugin system and selection is properly implimented.
         }
 
         
@@ -89,34 +92,33 @@ namespace VMLab.Helper
                 Assembly.LoadFile(file);
             }
 
-            _container.RegisterType<IFileSystem, FileSystem>();
-            _container.RegisterType<ILog, Log>(new ContainerControlledLifetimeManager());
-            _container.RegisterType<IEnvironmentDetails, EnvironmentDetails>(new ContainerControlledLifetimeManager());
-            _container.RegisterType<ICommandResult, CommandResult>();
-            _container.RegisterType<IFloppyUtil, FloppyUtil>();
-            _container.RegisterType<IShareFolderDetails, ShareFolderDetails>();
-            _container.RegisterType<IVMSettingsStore, VMSettingsStore>();
-            _container.RegisterType<IVMSettingStoreManager, VMSettingStoreManager>();
-            _container.RegisterType<ICmdletPathHelper, CmdletPathHelper>();
-            _container.RegisterType<IRegistryHelper, RegistryHelper>();
-            _container.RegisterType<IVMSettingStoreManager, VMSettingStoreManager>();
-            _container.RegisterType<IScriptHelper, ScriptHelper>();
-            _container.RegisterType<IIdempotentActionManager, IdempotentActionManager>(new ContainerControlledLifetimeManager());
-            _container.RegisterType<ILabLibManager, LabLibManager>(new ContainerControlledLifetimeManager());
-            _container.RegisterType<IPackageManager, PackageManager>(new ContainerControlledLifetimeManager());
+            _container.Register<IFileSystem, FileSystem>();
+            _container.Register<ILog, Log>().Singleton();
+            _container.Register<IEnvironmentDetails, EnvironmentDetails>().Singleton();
+            _container.Register<ICommandResult, CommandResult>();
+            _container.Register<IFloppyUtil, FloppyUtil>();
+            _container.Register<IShareFolderDetails, ShareFolderDetails>();
+            _container.Register<IVMSettingsStore, VMSettingsStore>();
+            _container.Register<IVMSettingStoreManager, VMSettingStoreManager>();
+            _container.Register<ICmdletPathHelper, CmdletPathHelper>();
+            _container.Register<IRegistryHelper, RegistryHelper>();
+            _container.Register<IScriptHelper, ScriptHelper>();
+            _container.Register<IIdempotentActionManager, IdempotentActionManager>().Singleton();
+            _container.Register<ILabLibManager, LabLibManager>().Singleton();
+            _container.Register<IPackageManager, PackageManager>().Singleton();
 
-            _container.RegisterType<IVMNodeHandler, CPUVMHandler>("CPUVMHandler");
-            _container.RegisterType<IVMNodeHandler, CredentialVMHandler>("CredentialVMHandler");
-            _container.RegisterType<IVMNodeHandler, HardDiskVMHandler>("HardDiskVMHandler");
-            _container.RegisterType<IVMNodeHandler, ISOVMHandler>("ISOVMHandler");
-            _container.RegisterType<IVMNodeHandler, MemoryVMHandler>("MemoryVMHandler");
-            _container.RegisterType<IVMNodeHandler, NetworkVMHandler>("NetworkVMHandler");
-            _container.RegisterType<IVMNodeHandler, NewVMHandler>("NewVMHandler");
-            _container.RegisterType<IVMNodeHandler, OnCreateVMHandler>("OnCreateVMHandler");
-            _container.RegisterType<IVMNodeHandler, OnDestroyVMHandler>("OnDestroyVMHandler");
-            _container.RegisterType<IVMNodeHandler, SharedFolderHandler>("SharedFolderHandler");
-            _container.RegisterType<IVMNodeHandler, TemplateVMHandler>("TemplateVMHandler");
-            _container.RegisterType<IVMNodeHandler, FloppyVMHandler>("FloppyVMHandler");
+            _container.Register<IVMNodeHandler, CPUVMHandler>();
+            _container.Register<IVMNodeHandler, CredentialVMHandler>();
+            _container.Register<IVMNodeHandler, HardDiskVMHandler>();
+            _container.Register<IVMNodeHandler, ISOVMHandler>();
+            _container.Register<IVMNodeHandler, MemoryVMHandler>();
+            _container.Register<IVMNodeHandler, NetworkVMHandler>();
+            _container.Register<IVMNodeHandler, NewVMHandler>();
+            _container.Register<IVMNodeHandler, OnCreateVMHandler>();
+            _container.Register<IVMNodeHandler, OnDestroyVMHandler>();
+            _container.Register<IVMNodeHandler, SharedFolderHandler>();
+            _container.Register<IVMNodeHandler, TemplateVMHandler>();
+            _container.Register<IVMNodeHandler, FloppyVMHandler>();
 
             var type = typeof (IDriverDetails);
             var alltypes = AppDomain.CurrentDomain.GetAssemblies()
@@ -127,7 +129,7 @@ namespace VMLab.Helper
 
             foreach (var d in drivertypes)
             {
-                _container.RegisterType(type, d, d.Name, new ContainerControlledLifetimeManager());
+                _container.Register(type, d);
             }
 
             SelectDefaultDriver();

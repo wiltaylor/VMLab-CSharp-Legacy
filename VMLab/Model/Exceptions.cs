@@ -189,4 +189,12 @@ namespace VMLab.Model
             
         }
     }
+
+    public class IocException : Exception
+    {
+        public IocException(string message) : base(message)
+        {
+            
+        }
+    }
 }

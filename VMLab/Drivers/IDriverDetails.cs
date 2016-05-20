@@ -1,4 +1,4 @@
-﻿using Microsoft.Practices.Unity;
+﻿using VMLab.Helper;
 
 namespace VMLab.Drivers
 {
@@ -7,6 +7,6 @@ namespace VMLab.Drivers
         string Name { get; }
 
         bool Usable();
-        void OnSelect(IUnityContainer container);
+        void OnSelect(IocContainer container);
     }
 }
