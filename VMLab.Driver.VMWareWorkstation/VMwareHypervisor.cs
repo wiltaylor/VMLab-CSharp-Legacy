@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web.Helpers;
 using VMLab.Helper;
 using VMLab.Model;
@@ -58,12 +59,16 @@ namespace VMLab.Driver.VMWareWorkstation
         private readonly IFileSystem _filesystem;
         private readonly IVMwareExe _vMwareExe;
         private readonly IVMwareDiskExe _vMwareDiskExe;
+        private readonly IEnvironmentDetails _environment;
+        private readonly ICancellableAsyncActionManager _asyncAction;
 
-        public VMwareHypervisor(IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe)
+        public VMwareHypervisor(IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe, IEnvironmentDetails environment, ICancellableAsyncActionManager asyncAction)
         {
             _filesystem = filesystem;
             _vMwareExe = vmwareexe;
             _vMwareDiskExe = vmwarediskexe;
+            _environment = environment;
+            _asyncAction = asyncAction;
         }
 
         public void Clone(string template, string target, string snapshot, CloneType type)
@@ -198,17 +203,20 @@ namespace VMLab.Driver.VMWareWorkstation
             if (GetVMPowerState(vmx) == VixPowerState.Off)
                 throw new GuestVMPoweredOffException("Can't check file exists when VM is powered off!");
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            return _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, credentials);
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, credentials);
 
-                var result = vix.FileExistInGuest(path);
+                    var result = vix.FileExistInGuest(path);
 
-                vix.LoginOutOfGuest();
+                    vix.LoginOutOfGuest();
 
-                return result;
-            }
+                    return result;
+                }
+            });
         }
 
         public bool DirectoryExistInGuest(string vmx, IVMCredential[] credentials, string path)
@@ -216,17 +224,20 @@ namespace VMLab.Driver.VMWareWorkstation
             if (GetVMPowerState(vmx) == VixPowerState.Off)
                 throw new GuestVMPoweredOffException("Can't check directory exists when VM is powered off!");
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            return _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, credentials);
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, credentials);
 
-                var result = vix.DirectoryExistInGuest(path);
+                    var result = vix.DirectoryExistInGuest(path);
 
-                vix.LoginOutOfGuest();
+                    vix.LoginOutOfGuest();
 
-                return result;
-            }
+                    return result;
+                }
+            });
         }
 
         public void StartVM(string vmx)
@@ -324,13 +335,16 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FileExists(hostPath))
                 throw new FileNotFoundException("Can't find host file!");
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, creds);
-                vix.CopyFileToGuest(hostPath, guestPath);
-                vix.LoginOutOfGuest();
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, creds);
+                    vix.CopyFileToGuest(hostPath, guestPath);
+                    vix.LoginOutOfGuest();
+                }
+            });
 
         }
 
@@ -341,13 +355,16 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FolderExists(Path.GetDirectoryName(hostPath)))
                 throw new FileNotFoundException("Invalid host path. Folder target file is being created in doesn't exist!");
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, creds);
-                vix.CopyFileFromGuest(hostPath, guestPath);
-                vix.LoginOutOfGuest();
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, creds);
+                    vix.CopyFileFromGuest(hostPath, guestPath);
+                    vix.LoginOutOfGuest();
+                }
+            });
         }
 
         public void DeleteFileInGuest(string vmx, IVMCredential[] creds, string path)
@@ -355,28 +372,36 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't delete file from vm when vmx doesnt exist!", vmx);
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, creds);
-                vix.DeleteFileInGuest(path);
-                vix.LoginOutOfGuest();
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, creds);
+                    vix.DeleteFileInGuest(path);
+                    vix.LoginOutOfGuest();
+                }
+            });
 
         }
+
+
 
         public void ExecuteCommand(string vmx, IVMCredential[] creds, string path, string args, bool noWait, bool interactive)
         {
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't execute command when vmx doesn't exist!", vmx);
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                LoginToVM(vmx, vix, creds, interactive);
-                vix.ExecuteCommand(path, args, false, !noWait);
-                vix.LoginOutOfGuest();
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    LoginToVM(vmx, vix, creds, interactive);
+                    vix.ExecuteCommand(path, args, false, !noWait);
+                    vix.LoginOutOfGuest();
+                }
+            });
         }
 
         public void AddSharedFolder(string vmx, string hostfolder, string sharename)
@@ -387,13 +412,16 @@ namespace VMLab.Driver.VMWareWorkstation
             if(!_filesystem.FolderExists(hostfolder))
                 throw new FileNotFoundException("Can't find host folder!");
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                vix.WaitForToolsInGuest();
-                vix.EnableSharedFolders();
-                vix.AddShareFolder(hostfolder, sharename);
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    vix.WaitForToolsInGuest();
+                    vix.EnableSharedFolders();
+                    vix.AddShareFolder(hostfolder, sharename);
+                }
+            });
         }
 
         public void RemoveSharedFolder(string vmx, string sharename)
@@ -621,11 +649,14 @@ namespace VMLab.Driver.VMWareWorkstation
 
         public void WaitForVMToBeReady(string vmx)
         {
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _asyncAction.Execute(delegate
             {
-                vix.ConnectToVM(vmx);
-                vix.WaitForToolsInGuest();
-            }
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+                    vix.WaitForToolsInGuest();
+                }
+            });
         }
 
         public VixPowerState GetVMPowerState(string vmx)

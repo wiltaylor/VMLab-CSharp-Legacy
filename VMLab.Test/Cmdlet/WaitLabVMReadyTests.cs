@@ -60,34 +60,11 @@ namespace VMLab.Test.Cmdlet
         public void CallingCmdletWillCallDriver()
         {
             Command.Parameters.Add(new CommandParameter("VMName", "MyVM"));
-            var seq = new MockSequence();
-            Driver.InSequence(seq).Setup(d => d.GetVMState("MyVM")).Returns(VMState.Other);
-            Driver.InSequence(seq).Setup(d => d.GetVMState("MyVM")).Returns(VMState.Ready);
             Environment.Setup(e => e.SleepTimeOut).Returns(0);
 
             Pipe.Invoke();
 
-            Driver.Verify(d => d.GetVMState("MyVM"), Times.Exactly(2));
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof(GuestVMPoweredOffException))]
-        public void CallingCmdletWillThrowIfVMIsShutdown()
-        {
-            Command.Parameters.Add(new CommandParameter("VMName", "MyVM"));
-            var seq = new MockSequence();
-            Driver.InSequence(seq).Setup(d => d.GetVMState("MyVM")).Returns(VMState.Other);
-            Driver.InSequence(seq).Setup(d => d.GetVMState("MyVM")).Returns(VMState.Shutdown);
-            Environment.Setup(e => e.SleepTimeOut).Returns(0);
-
-            try
-            {
-                Pipe.Invoke();
-            }
-            catch (CmdletInvocationException e)
-            {
-                throw e.InnerException;
-            }
+            Driver.Verify(d => d.WaitVMReady("MyVM"));
         }
 
         [TestMethod]

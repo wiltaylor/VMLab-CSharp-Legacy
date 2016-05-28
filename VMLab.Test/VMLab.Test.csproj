@@ -103,6 +103,7 @@
     <Compile Include="Cmdlet\SyncLabPackagesTests.cs" />
     <Compile Include="Cmdlet\WaitLabVMReadyTests.cs" />
     <Compile Include="Drivers\VMwareHyperVisorTest.cs" />
+    <Compile Include="Helper\FakeCancellableAsyncActionManager.cs" />
     <Compile Include="Helper\FakeLog.cs" />
     <Compile Include="Helper\IocContainerTests.cs" />
     <Compile Include="Helper\IOCTestObjects\RegularObject.cs" />

@@ -10,6 +10,7 @@ using VMLab.Driver.VMWareWorkstation;
 using VMLab.Drivers;
 using VMLab.Helper;
 using VMLab.Model;
+using VMLab.Test.Helper;
 
 namespace VMLab.Test.Drivers
 {
@@ -21,6 +22,7 @@ namespace VMLab.Test.Drivers
         public Mock<IVMwareExe> VMwareExe;
         public Mock<IVMwareDiskExe> VMwareDiskExe;
         public Mock<IServiceDiscovery> SVC;
+        public Mock<IEnvironmentDetails> Env;
         public Mock<IVix> Vix;
 
         [TestInitialize()]
@@ -31,7 +33,8 @@ namespace VMLab.Test.Drivers
             VMwareDiskExe = new Mock<IVMwareDiskExe>();
             Vix = new Mock<IVix>();
             SVC = new Mock<IServiceDiscovery>();
-            Hypervisor = new VMwareHypervisor(FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object);
+            Env = new Mock<IEnvironmentDetails>();
+            Hypervisor = new VMwareHypervisor(FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object, Env.Object, new FakeCancellableAsyncActionManager());
             
             ServiceDiscovery.UnitTestInject(SVC.Object);
             SVC.Setup(s => s.GetObject<IVix>()).Returns(Vix.Object);
@@ -39,12 +42,6 @@ namespace VMLab.Test.Drivers
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.ReadFile("c:\\existing.vmx"))
                 .Returns(string.Join(Environment.NewLine, "settingname = \"value\"", "anothersetting = \"anothervalue\""));
-        }
-
-        [TestCleanup]
-        public void TearDown()
-        {
-
         }
 
         [TestMethod]
@@ -302,6 +299,7 @@ namespace VMLab.Test.Drivers
         public void CallingStopVMForExistingVMWillResultInStopCalledByVMRun()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Hypervisor.StopVM("c:\\existingvm.vmx", false);
             Vix.Verify(v => v.ConnectToVM("c:\\existingvm.vmx"));
             Vix.Verify(v => v.PowerOffVM(false));
@@ -312,6 +310,7 @@ namespace VMLab.Test.Drivers
         public void CallingStopVMForExistingVMWillThrowIfThereIsAnError()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Vix.Setup(v => v.PowerOffVM(false)).Throws(new VixException(""));
             Hypervisor.StopVM("c:\\existingvm.vmx", false);
         }
@@ -320,6 +319,7 @@ namespace VMLab.Test.Drivers
         public void CallingStopVMWithForceWillCallVixWithForceParameter()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existingvm.vmx")).Returns(true);
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             Hypervisor.StopVM("c:\\existingvm.vmx", true);
             Vix.Verify(v => v.PowerOffVM(true));
         }

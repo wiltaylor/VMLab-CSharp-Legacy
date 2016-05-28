@@ -1,5 +1,4 @@
-﻿using System;
-using System.Management.Automation;
+﻿using System.Management.Automation;
 using System.Threading;
 using VMLab.Drivers;
 using VMLab.Helper;
