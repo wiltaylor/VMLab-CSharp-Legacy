@@ -1070,7 +1070,25 @@ namespace VMLab.Driver.VMWareWorkstation
         public void WaitVMReady(string vmname)
         {
             var vmx = GetVMPath(vmname, VMPath.VMX);
-            _hypervisor.WaitForVMToBeReady(vmx);
+
+            var waiting = true;
+
+            while (waiting)
+            {
+                try
+                {
+                    _hypervisor.WaitForVMToBeReady(vmx);
+                    waiting = false;
+                }
+                catch (Exception)
+                {
+                    Thread.Sleep(5000);
+
+                    if (_hypervisor.GetVMPowerState(vmx) == VixPowerState.Off)
+                        throw new GuestVMPoweredOffException("VM is powered off while waiting for it!");
+                }
+            }
+
         }
 
         public void CreateLabFile(string templateName)

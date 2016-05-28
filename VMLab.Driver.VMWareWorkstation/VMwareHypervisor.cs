@@ -174,17 +174,7 @@ namespace VMLab.Driver.VMWareWorkstation
                 {
                     try
                     {
-                        vix.WaitOnTools();
-
-                        while (GetVMPowerState(vmx) != VixPowerState.Ready)
-                        {
-                            Thread.Sleep(1000);
-                            if (GetVMPowerState(vmx) == VixPowerState.Off)
-                                throw new GuestVMPoweredOffException(
-                                    "VM was powered off while trying to login to guest api!");
-                        }
-
-
+                        vix.WaitForToolsInGuest();
                         vix.LoginToGuest(c.Username, c.Password, interactive);
                         return;
                     }
@@ -255,6 +245,9 @@ namespace VMLab.Driver.VMWareWorkstation
         {
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't stop vmx that doesn't exist!", vmx);
+
+            if (GetVMPowerState(vmx) == VixPowerState.Off)
+                return;
 
             using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
@@ -397,7 +390,7 @@ namespace VMLab.Driver.VMWareWorkstation
             using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
                 vix.ConnectToVM(vmx);
-                vix.WaitOnTools();
+                vix.WaitForToolsInGuest();
                 vix.EnableSharedFolders();
                 vix.AddShareFolder(hostfolder, sharename);
             }
@@ -411,7 +404,7 @@ namespace VMLab.Driver.VMWareWorkstation
             using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
                 vix.ConnectToVM(vmx);
-                vix.WaitOnTools();
+                vix.WaitForToolsInGuest();
                 vix.EnableSharedFolders();
                 vix.RemoveSharedFolder(sharename);
             }
@@ -445,6 +438,15 @@ namespace VMLab.Driver.VMWareWorkstation
 
         public void RevertToSnapshot(string vmx, string snapshotname)
         {
+
+            if (GetVMPowerState(vmx) != VixPowerState.Off)
+            {
+                StopVM(vmx, true);
+
+                Thread.Sleep(3000);
+            }
+                
+
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't revert to snapshot because vmx is not found!", vmx);
 
@@ -622,7 +624,7 @@ namespace VMLab.Driver.VMWareWorkstation
             using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
             {
                 vix.ConnectToVM(vmx);
-                vix.WaitOnTools();
+                vix.WaitForToolsInGuest();
             }
         }
 

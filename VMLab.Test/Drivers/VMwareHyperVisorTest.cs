@@ -677,6 +677,7 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingAddSharedFolderWillMakeACallToVixToAddShare()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
@@ -686,6 +687,7 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingAddSharedFolderWillMakeACallToVMRunToEnableSharing()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             Hypervisor.AddSharedFolder("c:\\existing.vmx", "c:\\myfolder", "myfolder");
@@ -696,6 +698,7 @@ namespace VMLab.Test.Drivers
         [ExpectedException(typeof (VixException))]
         public void CallingAddSharedFolderWillThrowIfEnableSharingReturnsAnError()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Vix.Setup(v => v.EnableSharedFolders()).Throws(new VixException(""));
@@ -706,6 +709,7 @@ namespace VMLab.Test.Drivers
         [ExpectedException(typeof (VixException))]
         public void CallingAddSharedFolderWillThrowIfaddingShareReturnsAnError()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             FileSystem.Setup(f => f.FolderExists("c:\\myfolder")).Returns(true);
             Vix.Setup(v => v.AddShareFolder("c:\\myfolder", "myfolder")).Throws(new VixException(""));
@@ -723,6 +727,7 @@ namespace VMLab.Test.Drivers
         [TestMethod]
         public void CallingRemoveSharedFolderWillMakeCalltoVix()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Hypervisor.RemoveSharedFolder("c:\\existing.vmx", "myshare");
             Vix.Verify(v => v.RemoveSharedFolder("myshare"));
@@ -732,6 +737,7 @@ namespace VMLab.Test.Drivers
         [ExpectedException(typeof (VixException))]
         public void CallingRemoveSharedFolderWillThrowIfVMRunReturnsAnError()
         {
+            Vix.Setup(v => v.PowerState()).Returns(VixPowerState.Ready);
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Vix.Setup(v => v.RemoveSharedFolder("myshare")).Throws(new VixException(""));
             Hypervisor.RemoveSharedFolder("c:\\existing.vmx", "myshare");

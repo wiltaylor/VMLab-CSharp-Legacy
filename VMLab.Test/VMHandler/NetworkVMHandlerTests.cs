@@ -128,6 +128,5 @@ namespace VMLab.Test.VMHandler
 
             Driver.Verify(d => d.AddNetwork("MyVM", "SupportedNetworkType", "SupportedNICType", null), Times.Never);
         }
-
     }
 }

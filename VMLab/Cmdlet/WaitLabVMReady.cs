@@ -1,4 +1,5 @@
-﻿using System.Management.Automation;
+﻿using System;
+using System.Management.Automation;
 using System.Threading;
 using VMLab.Drivers;
 using VMLab.Helper;
@@ -36,17 +37,7 @@ namespace VMLab.Cmdlet
             }
             else
             {
-                while (vmstate != VMState.Ready)
-                {
-                    vmstate = driver.GetVMState(VMName);
-
-                    if (vmstate == VMState.Shutdown)
-                        throw new GuestVMPoweredOffException(
-                            "VM Power state is set to shutdown while waiting for it to become available.");
-
-                    Thread.Sleep(env.SleepTimeOut);
-                }
-
+                driver.WaitVMReady(VMName);
             }
 
             base.ProcessRecord();

@@ -10,7 +10,6 @@ namespace VMLab.Driver.VMWareWorkstation
     public interface IVix : IDisposable
     {
         void ConnectToVM(string vmx);
-        void WaitOnTools(int timeout = int.MaxValue);
         void Clone(string targetvmx, string snapshotname, bool linked);
         string[] GetRunningVMs();
         void LoginToGuest(string username, string password, bool interactive);
@@ -34,6 +33,8 @@ namespace VMLab.Driver.VMWareWorkstation
         void RemoveSnapshot(string name);
         void RevertToSnapshot(string name);
         string[] GetSnapshots();
+
+        void WaitForToolsInGuest();
 
     }
 
@@ -119,24 +120,13 @@ namespace VMLab.Driver.VMWareWorkstation
 
             var state = (int) ((object[]) result)[0];
 
-            if ((state & (Constants.VIX_POWERSTATE_POWERED_ON | Constants.VIX_POWERSTATE_TOOLS_RUNNING)) != 0)
+            if ((state & (Constants.VIX_POWERSTATE_POWERED_ON | Constants.VIX_POWERSTATE_TOOLS_RUNNING)) == (Constants.VIX_POWERSTATE_POWERED_ON | Constants.VIX_POWERSTATE_TOOLS_RUNNING))
                 return VixPowerState.Ready;
 
-            if ((state & Constants.VIX_POWERSTATE_POWERED_OFF) != 0)
+            if ((state & Constants.VIX_POWERSTATE_POWERED_OFF) == Constants.VIX_POWERSTATE_POWERED_OFF)
                 return VixPowerState.Off;
 
-            return (state & Constants.VIX_POWERSTATE_SUSPENDED) != 0 ? VixPowerState.Suspended : VixPowerState.Pending;
-        }
-
-        public void WaitOnTools(int timeout = int.MaxValue)
-        {
-            var job = _vm.WaitForToolsInGuest(timeout, null);
-            var err = job.WaitWithoutResults();
-
-            if (_lib.ErrorIndicatesFailure(err))
-                throw new VixException($"Error while waiting for tools to load. Probably timed out!  Error code {err}");
-
-            CloseVixObject(job);
+            return (state & Constants.VIX_POWERSTATE_SUSPENDED) == Constants.VIX_POWERSTATE_SUSPENDED? VixPowerState.Suspended : VixPowerState.Pending;
         }
 
         private void CloseVixObject(object vixObject)
@@ -426,6 +416,17 @@ namespace VMLab.Driver.VMWareWorkstation
             }
 
             return returndata.ToArray();
+        }
+
+        public void WaitForToolsInGuest()
+        {
+            var job = _vm.WaitForToolsInGuest(int.MaxValue, null);
+            var err = job.WaitWithoutResults();
+
+            if(_lib.ErrorIndicatesFailure(err))
+                throw new VixException($"Error when waiting for tools to become ready! Error Code: {err}");
+
+            CloseVixObject(job);
         }
 
         private string[] GetSubSnasphots(ISnapshot parent)
