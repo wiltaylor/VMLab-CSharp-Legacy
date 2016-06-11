@@ -68,7 +68,15 @@ namespace VMLab.Helper
         {
             _completed = false;
 
-            await Task.Factory.StartNew(action, _cancellationTokenSource.Token);
+            try
+            {
+                await Task.Factory.StartNew(action, _cancellationTokenSource.Token);
+            }
+            catch(Exception e)
+            {
+                throw new ApplicationException("Failed to execute cancellable action", e);
+            }
+            
 
             _completed = true;
         }

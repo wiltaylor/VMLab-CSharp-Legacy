@@ -804,11 +804,13 @@ namespace VMLab.Test.Drivers
 
         [TestMethod]
         [ExpectedException(typeof (VixException))]
-        public void CallingRevertToSnapshotWillThrowIfVixReturnsError()
+        public void CallingRevertToSnapshotWillThrowIfVixReturnsErrors5times()
         {
             FileSystem.Setup(f => f.FileExists("c:\\existing.vmx")).Returns(true);
             Vix.Setup(v => v.RevertToSnapshot("mysnapshot")).Throws(new VixException(""));
-            Hypervisor.RevertToSnapshot("c:\\existing.vmx", "mysnapshot");
+
+            for(var i =0; i < 6; i++)
+                Hypervisor.RevertToSnapshot("c:\\existing.vmx", "mysnapshot");
         }
 
         [TestMethod]

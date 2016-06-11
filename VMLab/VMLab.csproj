@@ -108,6 +108,7 @@
     <Compile Include="Helper\IocRule.cs" />
     <Compile Include="Helper\IRegistryHelper.cs" />
     <Compile Include="Helper\IServiceDiscovery.cs" />
+    <Compile Include="Helper\Retryable.cs" />
     <Compile Include="Helper\ServiceDiscovery.cs" />
     <Compile Include="Helper\Log.cs" />
     <Compile Include="Model\Package.cs" />

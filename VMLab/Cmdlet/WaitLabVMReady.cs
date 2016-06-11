@@ -23,7 +23,7 @@ namespace VMLab.Cmdlet
 
             env.UpdateEnvironment(this);
 
-            var vmstate = driver.GetVMState(VMName);
+            var vmstate = driver.GetVMState(VMName);          
 
             if (Shutdown)
             {

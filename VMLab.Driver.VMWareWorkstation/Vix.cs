@@ -24,7 +24,7 @@ namespace VMLab.Driver.VMWareWorkstation
         void CopyFileToGuest(string hostfile, string guestfile);
         void CopyFileFromGuest(string hostfile, string guestfile);
         void DeleteFileInGuest(string path);
-        void ExecuteCommand(string path, string args, bool activeWindow, bool wait);
+        long ExecuteCommand(string path, string args, bool activeWindow, bool wait);
         void AddShareFolder(string path, string sharename);
         void EnableSharedFolders();
         void DisableSharedFolders();
@@ -33,7 +33,7 @@ namespace VMLab.Driver.VMWareWorkstation
         void RemoveSnapshot(string name);
         void RevertToSnapshot(string name);
         string[] GetSnapshots();
-
+        IEnumerable<VixProcess> GetGuestProcesses();
         void WaitForToolsInGuest();
 
     }
@@ -290,7 +290,7 @@ namespace VMLab.Driver.VMWareWorkstation
             CloseVixObject(job);
         }
 
-        public void ExecuteCommand(string path, string args, bool activeWindow, bool wait)
+        public long ExecuteCommand(string path, string args, bool activeWindow, bool wait)
         {
             var flags = 0;
 
@@ -305,6 +305,17 @@ namespace VMLab.Driver.VMWareWorkstation
 
             if (_lib.ErrorIndicatesFailure(err))
                 throw new VixException($"Error when trying to execute program in guest. Error code: {err}");
+
+            var props = default(object);
+            err = ((IVixHandle) job).GetProperties(new [] { Constants.VIX_PROPERTY_JOB_RESULT_PROCESS_ID }, ref props);
+
+            if (_lib.ErrorIndicatesFailure(err))
+                throw new VixException($"Error when trying to get process PID. Error code: {err}");
+
+            if (props == null)
+                return 0;
+
+            return (long)((object[])props)[0];
         }
 
         public void AddShareFolder(string path, string sharename)
@@ -423,6 +434,14 @@ namespace VMLab.Driver.VMWareWorkstation
             var job = _vm.WaitForToolsInGuest(int.MaxValue, null);
             var err = job.WaitWithoutResults();
 
+            if (err == Constants.VIX_E_TIMEOUT_WAITING_FOR_TOOLS)
+            {
+                Thread.Sleep(10000);
+                WaitForToolsInGuest();
+                CloseVixObject(job);
+                return;
+            }
+
             if(_lib.ErrorIndicatesFailure(err))
                 throw new VixException($"Error when waiting for tools to become ready! Error Code: {err}");
 
@@ -478,6 +497,43 @@ namespace VMLab.Driver.VMWareWorkstation
                 return (T) result;
 
             return (T) ((object[]) result)[0];
+        }
+
+        public IEnumerable<VixProcess> GetGuestProcesses()
+        {
+            var returndata = new List<VixProcess>();
+            var job = _vm.ListProcessesInGuest(0, null);
+            var err = job.WaitWithoutResults();
+
+            if(_lib.ErrorIndicatesFailure(err))
+                throw new VixException($"Error trying to get guest processes! Error code: {err}" );
+
+            var proccount = job.GetNumProperties(Constants.VIX_PROPERTY_JOB_RESULT_ITEM_NAME);
+            var result = new object[] {};
+
+            for (var index = 0; index < proccount; index++)
+            {
+                err = job.GetNthProperties(index, new[]
+                {
+                    Constants.VIX_PROPERTY_JOB_RESULT_ITEM_NAME,
+                    Constants.VIX_PROPERTY_JOB_RESULT_PROCESS_ID,
+                    Constants.VIX_PROPERTY_JOB_RESULT_PROCESS_OWNER,
+                    Constants.VIX_PROPERTY_JOB_RESULT_PROCESS_COMMAND
+                }, result);
+
+                if (_lib.ErrorIndicatesFailure(err))
+                    throw new VixException($"Error getting Process Item! Error code: {err}");
+
+                returndata.Add(new VixProcess
+                {
+                    Name = result[0] as string,
+                    PID = long.Parse((string) result[1]),
+                    Owner = result[2] as string,
+                    CommandLine = result[3] as string
+                });
+            }
+
+            return returndata;
         }
 
 

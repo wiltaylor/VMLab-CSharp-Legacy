@@ -23,7 +23,7 @@ namespace VMLab.Driver.VMWareWorkstation
         private readonly IVMSettingStoreManager _storeManager;
         private readonly IFileSystem _fileSystem;
         private readonly IFloppyUtil _floppyUtil;
-
+        
         public ICaps Caps { get; }
         
         public VMwareDriver(IEnvironmentDetails env, ILog log, IVMwareHypervisor hypervisor, ICaps caps, IVMSettingStoreManager storeman, IFileSystem filesystem, IFloppyUtil floppyUtil)

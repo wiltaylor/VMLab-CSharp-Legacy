@@ -50,6 +50,7 @@
     <Compile Include="IVMwareExe.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Vix.cs" />
+    <Compile Include="VixProcess.cs" />
     <Compile Include="VMwareCaps.cs" />
     <Compile Include="VMwareDriver.cs" />
     <Compile Include="VMwareHypervisor.cs" />

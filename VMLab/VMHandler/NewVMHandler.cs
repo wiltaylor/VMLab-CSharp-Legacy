@@ -46,6 +46,7 @@ namespace VMLab.VMHandler
         {
             var cfg = (Hashtable)settings;
             var keepPoweredOff = false;
+            var vmx = _driver.GetVMPath(vmname, VMPath.VMX);
 
             if (cfg.ContainsKey("KeepPoweredOff"))
                 keepPoweredOff = (bool)cfg["KeepPoweredOff"];
@@ -61,6 +62,11 @@ namespace VMLab.VMHandler
             }
 
             if (action != "destroy") return;
+
+            if (string.IsNullOrEmpty(vmx))
+                return;
+
+            
 
             if(_driver.GetVMState(vmname) == VMState.Other || _driver.GetVMState(vmname) == VMState.Ready)
                 _driver.StopVM(vmname, true);

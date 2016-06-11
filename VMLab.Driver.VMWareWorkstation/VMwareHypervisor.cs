@@ -61,14 +61,16 @@ namespace VMLab.Driver.VMWareWorkstation
         private readonly IVMwareDiskExe _vMwareDiskExe;
         private readonly IEnvironmentDetails _environment;
         private readonly ICancellableAsyncActionManager _asyncAction;
+        private readonly IRetryable _retryable;
 
-        public VMwareHypervisor(IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe, IEnvironmentDetails environment, ICancellableAsyncActionManager asyncAction)
+        public VMwareHypervisor(IFileSystem filesystem, IVMwareExe vmwareexe, IVMwareDiskExe vmwarediskexe, IEnvironmentDetails environment, ICancellableAsyncActionManager asyncAction, IRetryable retryable)
         {
             _filesystem = filesystem;
             _vMwareExe = vmwareexe;
             _vMwareDiskExe = vmwarediskexe;
             _environment = environment;
             _asyncAction = asyncAction;
+            _retryable = retryable;
         }
 
         public void Clone(string template, string target, string snapshot, CloneType type)
@@ -257,14 +259,26 @@ namespace VMLab.Driver.VMWareWorkstation
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't stop vmx that doesn't exist!", vmx);
 
-            if (GetVMPowerState(vmx) == VixPowerState.Off)
-                return;
-
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            _retryable.Run(5000, 10, () =>
             {
-                vix.ConnectToVM(vmx);
-                vix.PowerOffVM(force);
-            }
+                if (GetVMPowerState(vmx) == VixPowerState.Off)
+                    return true;
+
+                using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                {
+                    vix.ConnectToVM(vmx);
+
+                    if (!force)
+                        vix.WaitForToolsInGuest();
+
+                    vix.PowerOffVM(force);
+                }
+
+                return true;
+            });
+
+            //Wait for VM to power off.
+            while(GetVMPowerState(vmx) != VixPowerState.Off) { Thread.Sleep(1000);}
         }
 
         public void ResetVM(string vmx, bool force)
@@ -398,7 +412,8 @@ namespace VMLab.Driver.VMWareWorkstation
                 {
                     vix.ConnectToVM(vmx);
                     LoginToVM(vmx, vix, creds, interactive);
-                    vix.ExecuteCommand(path, args, false, !noWait);
+                    vix.WaitForToolsInGuest();
+                    vix.ExecuteCommand(path, args, interactive, !noWait);                   
                     vix.LoginOutOfGuest();
                 }
             });
@@ -470,18 +485,33 @@ namespace VMLab.Driver.VMWareWorkstation
             if (GetVMPowerState(vmx) != VixPowerState.Off)
             {
                 StopVM(vmx, true);
-
-                Thread.Sleep(3000);
             }
                 
 
             if (!_filesystem.FileExists(vmx))
                 throw new VMXDoesntExistException("Can't revert to snapshot because vmx is not found!", vmx);
 
-            using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+            var attempts = 5;
+
+            while (attempts > 0)
             {
-                vix.ConnectToVM(vmx);
-                vix.RevertToSnapshot(snapshotname);
+                try
+                {
+                    using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
+                    {
+                        vix.ConnectToVM(vmx);
+                        vix.RevertToSnapshot(snapshotname);
+                        return;
+                    }
+                }
+                catch
+                {
+                    attempts--;
+                    Thread.Sleep(3000);
+
+                    if (attempts == 0)
+                        throw;
+                }
             }
         }
 
@@ -654,7 +684,19 @@ namespace VMLab.Driver.VMWareWorkstation
                 using (var vix = ServiceDiscovery.GetInstance().GetObject<IVix>())
                 {
                     vix.ConnectToVM(vmx);
-                    vix.WaitForToolsInGuest();
+
+                    while (true)
+                    {
+                        try
+                        {
+                            vix.WaitForToolsInGuest();
+                            return;
+                        }
+                        catch
+                        {
+                            Thread.Sleep(3000);
+                        }
+                    }
                 }
             });
         }

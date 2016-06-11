@@ -106,6 +106,8 @@ namespace VMLab.Helper
             _container.Register<IIdempotentActionManager, IdempotentActionManager>().Singleton();
             _container.Register<ILabLibManager, LabLibManager>().Singleton();
             _container.Register<IPackageManager, PackageManager>().Singleton();
+            _container.Register<ICancellableAsyncActionManager, CancellableAsyncActionManager>();
+            _container.Register<IRetryable, Retryable>();
 
             _container.Register<IVMNodeHandler, CPUVMHandler>();
             _container.Register<IVMNodeHandler, CredentialVMHandler>();
