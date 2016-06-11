@@ -24,6 +24,7 @@ namespace VMLab.Test.Drivers
         public Mock<IServiceDiscovery> SVC;
         public Mock<IEnvironmentDetails> Env;
         public Mock<IVix> Vix;
+        public Mock<IRetryable> Retryable;
 
         [TestInitialize()]
         public void Setup()
@@ -34,7 +35,8 @@ namespace VMLab.Test.Drivers
             Vix = new Mock<IVix>();
             SVC = new Mock<IServiceDiscovery>();
             Env = new Mock<IEnvironmentDetails>();
-            Hypervisor = new VMwareHypervisor(FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object, Env.Object, new FakeCancellableAsyncActionManager());
+            Retryable = new Mock<IRetryable>();
+            Hypervisor = new VMwareHypervisor(FileSystem.Object, VMwareExe.Object, VMwareDiskExe.Object, Env.Object, new FakeCancellableAsyncActionManager(), Retryable.Object);
             
             ServiceDiscovery.UnitTestInject(SVC.Object);
             SVC.Setup(s => s.GetObject<IVix>()).Returns(Vix.Object);
